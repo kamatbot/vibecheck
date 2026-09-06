@@ -8,6 +8,7 @@
 <meta property="og:title" content="What's your vibe? 👀">
 <meta property="og:description" content="Take the 60-second vibe check and see how much we match.">
 <meta name="theme-color" content="#0b0a1f">
+<link rel="preload" href="avatars.glb" as="fetch" crossorigin="anonymous">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -74,6 +75,10 @@ h1{font-size:clamp(56px,17vw,96px);line-height:.88;margin:0;font-weight:700;lett
 .card::before{content:"";position:absolute;inset:-40%;background:conic-gradient(from 0deg,transparent 0 60%,rgba(255,255,255,.25) 70%,transparent 80%);animation:sheen 5s linear infinite;pointer-events:none}
 @keyframes sheen{to{transform:rotate(360deg)}}
 .stage{position:relative;height:290px;margin:-10px -24px 0}.vs .stage{margin:-12px -20px 4px}.stage canvas{width:100%;height:100%;display:block;touch-action:pan-y}.hint{position:absolute;bottom:2px;right:14px;font-size:12px;color:var(--muted);animation:in 1s 1.5s both}
+.stage-loader{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--muted);font-size:14px;font-weight:600;pointer-events:none;transition:opacity .3s;z-index:2}
+.stage-loader.done{opacity:0;display:none}
+.stage-loader .spin{width:36px;height:36px;border:3px solid rgba(255,255,255,.15);border-top-color:var(--c3);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 .big{font-size:110px;line-height:1;display:block;animation:bounce 1.2s cubic-bezier(.2,.9,.3,1.5) both;filter:drop-shadow(0 16px 24px rgba(0,0,0,.45))}
 @keyframes bounce{0%{transform:scale(0) rotate(-30deg)}60%{transform:scale(1.25) rotate(8deg)}100%{transform:scale(1)}}
 .you{font-size:15px;color:var(--muted);margin:14px 0 4px;font-weight:600;letter-spacing:.1em;text-transform:uppercase}
@@ -139,7 +144,7 @@ canvas#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-in
 <!-- RESULT -->
 <section class="screen" id="s-result">
   <div class="card" id="card">
-    <div class="stage"><canvas id="vibe"></canvas><div class="hint">tap me 👆</div></div>
+    <div class="stage"><canvas id="vibe"></canvas><div class="stage-loader" id="vibeLoader"><div class="spin"></div><span>summoning your 3D vibe...</span></div><div class="hint">tap me 👆</div></div>
     <div class="you" id="youlabel">It's giving</div>
     <h2 class="arche" id="arche"></h2>
     <p class="desc" id="desc"></p>
@@ -348,8 +353,11 @@ let R,V=null,buildId=0;
 // personas: [{v,a,arche}] — one avatar centred, or two side by side facing each other (always different bases)
 function buildVibe(personas){
   if(!window.THREE)return;const id=++buildId;
+  const ldr=$("#vibeLoader");
+  if(ldr&&!V)ldr.classList.remove("done");
   GLB.then(lib=>{
     if(id!==buildId)return;
+    if(ldr)ldr.classList.add("done");
     const cv=$("#vibe");const W=cv.clientWidth||400,H=cv.clientHeight||290;
     if(!R){R=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:true});R.setPixelRatio(Math.min(2,devicePixelRatio));R.outputEncoding=THREE.sRGBEncoding;cv.addEventListener("pointerdown",()=>{if(V)V.spin=10})}
     R.setSize(W,H,false);
@@ -364,7 +372,10 @@ function buildVibe(personas){
     const cs=personas.map((p,i)=>makeCreature(scene,lib,p.v,p.a,idx[i],two?(i?1.35:-1.35):0,two?.85:1));
     V={scene,cam,cs,spin:0,t0:performance.now(),raf:V&&V.raf};
     if(!V.raf)loop();
-  }).catch(e=>console.warn("avatar load failed",e));
+  }).catch(e=>{
+    console.warn("avatar load failed",e);
+    if(ldr)ldr.innerHTML="<span>⚠️ tap to retry loading</span>";
+  });
 }
 function loop(){
   if(!V||!$("#s-result").classList.contains("on")){if(V)V.raf=0;return}
