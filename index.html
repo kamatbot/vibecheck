@@ -44,6 +44,7 @@ h1{font-size:clamp(56px,17vw,96px);line-height:.88;margin:0;font-weight:700;lett
 .name{width:100%;padding:16px 18px;border-radius:16px;border:1px solid var(--line);background:var(--card);color:#fff;font-size:18px;outline:0;backdrop-filter:blur(10px)}
 .name:focus{border-color:var(--c3);box-shadow:0 0 0 4px rgba(56,232,255,.18)}
 .name::placeholder{color:rgba(255,255,255,.4)}
+.seg{display:flex;gap:8px}.seg button{flex:1;padding:12px 6px;border-radius:14px;background:var(--card);border:1px solid var(--line);font-weight:600;font-size:15px;transition:.15s}.seg button.on{background:linear-gradient(135deg,var(--c1),var(--c4));border-color:transparent;transform:scale(1.04)}
 .btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:18px 22px;border-radius:18px;font-size:20px;font-weight:700;background:#fff;color:#0b0a1f;box-shadow:0 12px 40px rgba(255,255,255,.18);transition:transform .15s,box-shadow .15s}
 .btn:active{transform:scale(.96)}
 .btn.primary{background:linear-gradient(135deg,var(--c1),var(--c4));color:#fff;box-shadow:0 12px 40px rgba(155,92,255,.45)}
@@ -128,6 +129,7 @@ canvas#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-in
     <h1>VIBE<br>CHECK</h1>
     <p class="sub">12 questions. 60 seconds. Find your vibe, then see if your friends actually match. No cap.</p>
     <input class="name" id="name" maxlength="14" placeholder="Your name or nickname (optional)" autocomplete="off">
+    <div class="seg" id="gender"><button data-g="m">👦 He</button><button data-g="f">👧 She</button><button data-g="x" class="on">✨ Surprise me</button></div>
     <button class="btn primary pulse" id="start">Lock in 🔒</button>
   </div>
   <div class="foot">No account. No tracking. No cap. Your answers live only in the link you share.</div>
@@ -198,14 +200,15 @@ const AX=[
 const WILD={n:"Wildcard",e:"🃏",d:"Delulu in the best way. Nobody can predict you. Not even you."};
 const AXN=["Chaos","Chill","Brain","Social"];
 const $=s=>document.querySelector(s);
-const state={i:0,a:[],name:""};
+const state={i:0,a:[],name:"",gender:"x"};
+$("#gender").onclick=e=>{const b=e.target.closest("button");if(!b)return;state.gender=b.dataset.g;[...$("#gender").children].forEach(c=>c.classList.toggle("on",c===b))};
 
 // ---- friend from URL ----
 function readHash(){
   const p=new URLSearchParams(location.hash.slice(1));
   const a=(p.get("a")||"").split("").map(Number);
   if(a.length!==Q.length||a.some(x=>isNaN(x)||x<0||x>3))return null;
-  return {a,name:(p.get("n")||"").slice(0,14),hops:Math.min(999,+(p.get("h")||0)||0)};
+  return {a,name:(p.get("n")||"").slice(0,14),hops:Math.min(999,+(p.get("h")||0)||0),g:/^[mf]$/.test(p.get("g"))?p.get("g"):"x"};
 }
 let friend=readHash();
 function applyFriend(){
@@ -229,7 +232,7 @@ function show(id){document.querySelectorAll(".screen").forEach(s=>s.classList.re
 $("#start").onclick=()=>{state.name=$("#name").value.trim();state.i=0;state.a=[];show("#s-quiz");renderQ()};
 $("#again").onclick=()=>{state.i=0;state.a=[];show("#s-quiz");renderQ()};
 // pass the phone: current player becomes the "friend", player two takes the intro path
-$("#pass").onclick=()=>{friend={a:state.a.slice(),name:state.name,hops:friend?friend.hops+1:0};applyFriend();$("#name").value="";$("#name").placeholder="Friend's name or nickname";show("#s-intro");$("#name").focus()};
+$("#pass").onclick=()=>{friend={a:state.a.slice(),name:state.name,hops:friend?friend.hops+1:0,g:state.gender};applyFriend();$("#name").value="";$("#name").placeholder="Friend's name or nickname";$("#gender").lastElementChild.click();show("#s-intro");$("#name").focus()};
 
 function renderQ(){
   const q=Q[state.i];
@@ -286,14 +289,14 @@ function finish(){
     $("#chain").innerHTML=friend.hops>0?`🔗 This vibe check has hopped through <b>${friend.hops+1} friends</b> so far. Keep the aura going.`:`🔗 You're the first hop. Start the chain, farm the aura.`;
     setTimeout(()=>{$("#ringp").style.strokeDashoffset=440-440*p/100;countUp($("#pct"),p,1600)},350);
     $("#share").textContent="Send it to another friend 📲";
-    buildVibe([{v,a:state.a,arche},{v:fs.v,a:friend.a,arche:fs.arche}]);
-  } else {vs.hidden=true;$("#card").prepend(stage);buildVibe([{v,a:state.a,arche}])}
+    buildVibe([{v,a:state.a,g:state.gender},{v:fs.v,a:friend.a,g:friend.g}]);
+  } else {vs.hidden=true;$("#card").prepend(stage);buildVibe([{v,a:state.a,g:state.gender}])}
 }
 function countUp(el,to,ms){setTimeout(()=>el.textContent=to,ms+80);const t0=performance.now();(function f(t){const k=Math.min(1,(t-t0)/ms);el.textContent=Math.round(to*(1-Math.pow(1-k,3)));if(k<1)requestAnimationFrame(f)})(t0)}
 
 // ---- share ----
 function shareLink(){
-  const p=new URLSearchParams({a:state.a.join(""),n:state.name,h:friend?friend.hops+1:0});
+  const p=new URLSearchParams({a:state.a.join(""),n:state.name,h:friend?friend.hops+1:0,g:state.gender});
   return location.origin+location.pathname+"#"+p.toString();
 }
 $("#share").onclick=async()=>{
@@ -319,7 +322,8 @@ addEventListener("pointerleave",()=>card.style.transform="");
 function seed(str){let h=1779033703^str.length;for(const c of str)h=Math.imul(h^c.charCodeAt(0),3432918353),h=h<<13|h>>>19;return()=>{h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return((h^=h>>>16)>>>0)/4294967296}}
 const AVATARS=["avatar_m1","avatar_m2","avatar_m3","avatar_m4","avatar_f1","avatar_f2","avatar_f3","avatar_f4"];
 const GLB=window.THREE&&THREE.GLTFLoader?new THREE.GLTFLoader().loadAsync("avatars.glb").then(g=>g.scene):Promise.reject(new Error("no loader"));
-const baseIdx=a=>Math.floor(seed(a.join(""))()*AVATARS.length);
+const pool=g=>g==="m"?[0,1,2,3]:g==="f"?[4,5,6,7]:[0,1,2,3,4,5,6,7];
+const baseIdx=(a,g)=>{const P=pool(g);return P[Math.floor(seed(a.join(""))()*P.length)]};
 // which attributes you wear, straight from your answers. v=[chaos,chill,brain,social]
 function attrs(v,a){
   const top=v.indexOf(Math.max(...v)),tr=a.filter((k,i)=>Q[i].a===k).length;
@@ -337,7 +341,7 @@ function attrs(v,a){
 }
 function makeCreature(scene,lib,v,a,idx,x,sc){
   const at=attrs(v,a),rnd=seed(a.join(""));
-  const root=new THREE.Group();root.position.set(x,-1.15,0);root.scale.setScalar(sc);scene.add(root);
+  const root=new THREE.Group();root.position.set(x,0,0);root.scale.setScalar(sc);scene.add(root);
   const G=new THREE.Group();root.add(G);
   const add=(name,tint)=>{const src=lib.getObjectByName(name);if(!src)return;const m=src.clone();
     m.traverse(o=>{if(o.isMesh){o.material=o.material.clone();if(tint&&tint[o.material.name])o.material.color.set("#"+tint[o.material.name])}});G.add(m)};
@@ -362,15 +366,17 @@ function buildVibe(personas){
     if(!R){R=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:true});R.setPixelRatio(Math.min(2,devicePixelRatio));R.outputEncoding=THREE.sRGBEncoding;cv.addEventListener("pointerdown",()=>{if(V)V.spin=10})}
     R.setSize(W,H,false);
     const two=personas.length>1;
-    const scene=new THREE.Scene(),cam=new THREE.PerspectiveCamera(34,W/H,.1,50);cam.position.set(0,.15,two?6.2:5);
+    const scene=new THREE.Scene(),cam=new THREE.PerspectiveCamera(34,W/H,.1,50);cam.position.set(0,0,6);
     scene.add(new THREE.HemisphereLight(0xffffff,0xffd6e0,1));
     const key=new THREE.DirectionalLight(0xfff1e0,1.1);key.position.set(2,5,5);scene.add(key);
     const fill=new THREE.DirectionalLight(0xdfe9ff,.5);fill.position.set(-4,2,4);scene.add(fill);
     const rim=new THREE.PointLight(0xff4d8d,.6,20);rim.position.set(4,-2,-3);scene.add(rim);
-    const idx=personas.map(p=>baseIdx(p.a));
-    if(two&&idx[0]===idx[1])idx[1]=(idx[1]+1)%AVATARS.length;
-    const cs=personas.map((p,i)=>makeCreature(scene,lib,p.v,p.a,idx[i],two?(i?1.35:-1.35):0,two?.85:1));
-    V={scene,cam,cs,spin:0,t0:performance.now(),raf:V&&V.raf};
+    const idx=personas.map(p=>baseIdx(p.a,p.g));
+    if(two&&idx[0]===idx[1]){const P=pool(personas[1].g);idx[1]=P[(P.indexOf(idx[1])+1)%P.length]}
+    const cs=personas.map((p,i)=>makeCreature(scene,lib,p.v,p.a,idx[i],two?(i?.8:-.8):0,1));
+    const fit=()=>{const box=new THREE.Box3().setFromObject(scene),c=box.getCenter(new THREE.Vector3()),sz=box.getSize(new THREE.Vector3()),f=Math.tan(cam.fov/2*Math.PI/180);
+      cam.aspect=cv.clientWidth/cv.clientHeight;cam.updateProjectionMatrix();const d=Math.max(sz.y/(2*f),sz.x/(2*f*cam.aspect))*1.06+sz.z/2;cam.position.set(c.x,c.y,c.z+d);cam.lookAt(c)};fit();
+    V={scene,cam,cs,fit,spin:0,t0:performance.now(),raf:V&&V.raf};
     if(!V.raf)loop();
   }).catch(e=>{
     console.warn("avatar load failed",e);
@@ -383,10 +389,10 @@ function loop(){
   const t=(performance.now()-V.t0)/1000;V.spin*=.94;
   V.cs.forEach(c=>{const tt=t+c.phase;
     c.G.rotation.y=c.face+Math.sin(tt*.6)*.25+px*.5+(V.spin>.05?V.spin*t*.3:0);c.G.rotation.x=py*.15;c.G.rotation.z=Math.sin(tt*2.2)*.03;
-    const b=Math.abs(Math.sin(tt*2.2));c.G.position.y=b*c.bob;c.G.scale.set(1-.03*b,1+.05*b,1-.03*b)});
+    const b=Math.abs(Math.sin(tt*2.2));c.G.position.y=b*c.bob*.4;c.G.scale.set(1-.01*b,1+.02*b,1-.01*b)});
   R.render(V.scene,V.cam);
 }
-addEventListener("resize",()=>{if(!V)return;const cv=$("#vibe");R.setSize(cv.clientWidth,cv.clientHeight,false);V.cam.aspect=cv.clientWidth/cv.clientHeight;V.cam.updateProjectionMatrix()});
+addEventListener("resize",()=>{if(!V)return;const cv=$("#vibe");R.setSize(cv.clientWidth,cv.clientHeight,false);V.fit()});
 
 // ---- confetti ---- ponytail: tiny canvas burst, no lib
 function confetti(){

@@ -14,13 +14,13 @@ Open http://localhost:8791.
 
 ## How the viral loop works
 
-- Share link = `#a=<12 answers>&n=<name>&h=<hop count>`.
+- Share link = `#a=<12 answers>&n=<name>&h=<hop count>&g=<m/f/x>`.
 - A friend opening it sees "Maya wants to see if you match", plays, and gets a match ring, shared picks, and both Vibe avatars side by side.
 - "Friend plays on this phone" does the same hand-off on one device.
 
 ## Avatars
 
-`blender/make_avatars.py` builds 8 chibi bases (4 male, 4 female) and 8 attribute accessories in Blender and exports `avatars.glb`:
+`blender/make_avatars.py` builds 8 stylised teen bases (4 male, 4 female, each with its own hair, pose, outfit and body type) and 8 attribute accessories in Blender and exports `avatars.glb`:
 
 | Attribute | Mesh | Triggered by |
 |---|---|---|
@@ -33,7 +33,7 @@ Open http://localhost:8791.
 | leader | crown | yapper, infinite aura, or Social top |
 | chill | nightcap | Chill top axis or bed rotting |
 
-Base avatar is seeded from your answers. In a match the two players always get different bases.
+Base avatar is seeded from your answers, drawn from the pool for the gender you picked (or all 8 for "surprise me"). In a match the two players always get different bases.
 
 Regenerate:
 
