@@ -118,16 +118,16 @@ canvas#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-in
   <div class="hero">
     <div class="pill" id="invite" hidden>👀 <span></span></div>
     <h1>VIBE<br>CHECK</h1>
-    <p class="sub">10 questions. 60 seconds. Find your vibe, then see how much you match your friends.</p>
+    <p class="sub">12 questions. 60 seconds. Find your vibe, then see if your friends actually match. No cap.</p>
     <input class="name" id="name" maxlength="14" placeholder="Your name or nickname (optional)" autocomplete="off">
-    <button class="btn primary pulse" id="start">Let's go ✨</button>
+    <button class="btn primary pulse" id="start">Lock in 🔒</button>
   </div>
-  <div class="foot">No account. No tracking. Your answers live only in the link you share.</div>
+  <div class="foot">No account. No tracking. No cap. Your answers live only in the link you share.</div>
 </section>
 
 <!-- QUIZ -->
 <section class="screen" id="s-quiz">
-  <div class="top"><div class="bar"><i id="prog"></i></div><span class="count" id="count">1/10</span></div>
+  <div class="top"><div class="bar"><i id="prog"></i></div><span class="count" id="count">1/12</span></div>
   <div class="tag" id="tag"></div>
   <h2 class="q" id="qtext"></h2>
   <div class="opts" id="opts"></div>
@@ -137,7 +137,7 @@ canvas#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-in
 <section class="screen" id="s-result">
   <div class="card" id="card">
     <span class="big" id="big"></span>
-    <div class="you" id="youlabel">Your vibe is</div>
+    <div class="you" id="youlabel">It's giving</div>
     <h2 class="arche" id="arche"></h2>
     <p class="desc" id="desc"></p>
     <div class="stats" id="stats"></div>
@@ -157,35 +157,37 @@ canvas#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-in
   <div class="actions">
     <button class="btn primary pulse" id="share">Send to a friend 📲</button>
     <button class="btn ghost" id="pass">Friend plays on this phone 📱</button>
-    <button class="btn ghost" id="again">Redo mine 🔁</button>
+    <button class="btn ghost" id="again">Run it back 🔁</button>
   </div>
-  <div class="foot">Share the link. Your friend plays, then sees your match % — and passes it on.</div>
+  <div class="foot">Send the link. Your friend plays, sees your match %, and passes it on. Aura farming, but wholesome.</div>
 </section>
 
 </div>
-<div class="toast" id="toast">Link copied — paste it to a friend!</div>
+<div class="toast" id="toast">Link copied. Go send it 📲</div>
 
 <script>
 // axes: [chaos, chill, nerd, social]
 const Q=[
- {t:"Music",q:"Your playlist on shuffle is mostly…",o:[["🎤","Pop",[1,0,0,2]],["🎧","Hip-hop",[2,0,0,1]],["🎸","Rock",[2,0,1,0]],["🌙","Lo-fi",[0,3,1,0]]]},
- {t:"Weekend",q:"Perfect Saturday?",o:[["🎮","Gaming all day",[1,1,2,0]],["🛹","Out with friends",[1,0,0,3]],["🎨","Making stuff",[0,1,2,1]],["😴","Sleeping in",[0,3,0,0]]]},
- {t:"Superpower",q:"Pick one. No takebacks.",o:[["⚡","Teleport",[2,0,0,1]],["🧠","Read minds",[0,0,2,2]],["👻","Invisibility",[1,2,1,0]],["⏳","Stop time",[0,2,2,0]]]},
- {t:"Snack",q:"3am snack of choice",o:[["🍕","Pizza",[1,0,0,2]],["🧋","Boba",[0,1,0,2]],["🍟","Chips",[2,1,0,0]],["🍓","Fruit",[0,2,1,0]]]},
- {t:"Group project",q:"In a group project you're the…",o:[["📣","Leader",[1,0,0,3]],["💡","Ideas person",[2,0,1,1]],["📚","One doing all the work",[0,1,3,0]],["🎉","Vibes",[2,2,0,0]]]},
+ {t:"Music",q:"Your playlist on shuffle is giving…",o:[["🎤","Pop girlie",[1,0,0,2]],["🎧","Rage rap",[2,0,0,1]],["🎸","Guitar core",[2,0,1,0]],["🌙","Sad lo-fi",[0,3,1,0]]]},
+ {t:"Weekend",q:"Ideal Saturday, no cap:",o:[["🎮","Locked in gaming",[1,1,2,0]],["🛹","Out with the squad",[1,0,0,3]],["🎨","Making stuff",[0,1,2,1]],["🛌","Bed rotting",[0,3,0,0]]]},
+ {t:"Superpower",q:"Pick a power. No takebacks.",o:[["⚡","Teleport",[2,0,0,1]],["🧠","Read minds",[0,0,2,2]],["👻","Invisibility",[1,2,1,0]],["⏳","Stop time",[0,2,2,0]]]},
+ {t:"Snack",q:"3am snack, be so fr:",o:[["🍕","Pizza",[1,0,0,2]],["🧋","Boba",[0,1,0,2]],["🍟","Chips",[2,1,0,0]],["🍓","Fruit (delulu)",[0,2,1,0]]]},
+ {t:"Aura check",q:"How's your aura today?",o:[["✨","Farming aura",[0,0,0,3]],["😭","Lost 1000 aura",[3,0,0,0]],["🧘","Aura is a construct",[0,3,0,0]],["📊","I track it in a spreadsheet",[0,0,3,0]]]},
  {t:"Trivia",q:"Fastest land animal?",a:0,o:[["🐆","Cheetah"],["🐎","Horse"],["🦘","Kangaroo"],["🐕","Greyhound"]]},
- {t:"Aesthetic",q:"Your whole aesthetic is…",o:[["🌆","Neon city",[2,0,1,1]],["🌿","Cottagecore",[0,3,0,1]],["🧢","Streetwear",[1,0,0,3]],["💿","Y2K",[2,1,0,1]]]},
+ {t:"Group project",q:"In a group project you're the…",o:[["📣","One who yaps",[1,0,0,3]],["💡","Idea machine",[2,0,1,1]],["📚","One doing all the work",[0,1,3,0]],["🎉","Just vibes",[2,2,0,0]]]},
+ {t:"Aesthetic",q:"Your fit is giving…",o:[["🌆","Neon city",[2,0,1,1]],["🌿","Cottagecore",[0,3,0,1]],["🧢","Streetwear",[1,0,0,3]],["💿","Y2K",[2,1,0,1]]]},
  {t:"Trivia",q:"Which planet has the most moons?",a:1,o:[["🔴","Jupiter"],["🪐","Saturn"],["🟠","Mars"],["🔵","Neptune"]]},
- {t:"Would you rather",q:"Would you rather be…",o:[["🌟","Famous",[1,0,0,3]],["💸","Rich",[2,1,0,0]],["🎓","A genius",[0,1,3,0]],["💖","Loved by everyone",[0,2,0,2]]]},
+ {t:"Would you rather",q:"Would you rather have…",o:[["✨","Infinite aura",[1,0,0,3]],["💸","Infinite money",[2,1,0,0]],["🎓","Giga brain",[0,1,3,0]],["💖","Infinite rizz",[0,2,0,2]]]},
+ {t:"Trivia",q:"Which one is NOT a real animal?",a:3,o:[["🦎","Axolotl"],["🐡","Blobfish"],["🐹","Capybara"],["🚽","Skibidi"]]},
  {t:"Texting",q:"Your texting style:",o:[["🔡","all lowercase",[0,3,0,1]],["😭","EMOJIS ONLY",[3,0,0,1]],["📝","Perfect grammar.",[0,1,3,0]],["🎙️","Voice notes",[1,0,0,3]]]},
 ];
 const AX=[
- {n:"Chaos Gremlin",e:"😈",d:"Unhinged in the best way. Every group chat needs one."},
- {n:"Zen NPC",e:"🌙",d:"Unbothered. Moisturized. Living in your own lane."},
- {n:"Lore Master",e:"🧠",d:"You know things. Frankly a scary amount of things."},
- {n:"Main Character",e:"✨",d:"The plot just kind of follows you around."},
+ {n:"Chaos Gremlin",e:"😈",d:"Certified menace. Crash-out speedrunner. The group chat's main event."},
+ {n:"Zen NPC",e:"🌙",d:"Unbothered. Moisturized. Bed rotting in peace. Zero aura lost, ever."},
+ {n:"Lore Master",e:"🧠",d:"Giga brain. Knows the lore of everything and will explain it unprompted."},
+ {n:"Main Character",e:"✨",d:"Infinite aura. The plot literally follows you around. It's giving protagonist."},
 ];
-const WILD={n:"Wildcard",e:"🃏",d:"Nobody can predict you. Not even you."};
+const WILD={n:"Wildcard",e:"🃏",d:"Delulu in the best way. Nobody can predict you. Not even you."};
 const AXN=["Chaos","Chill","Brain","Social"];
 const $=s=>document.querySelector(s);
 const state={i:0,a:[],name:""};
@@ -254,16 +256,16 @@ function match(a,b){
   const cos=na&&nb?dot/(na*nb):0;
   return Math.max(4,Math.min(99,Math.round(same/a.length*65+cos*35)));
 }
-function duo(p){return p>=80?"Twin flames 🔥":p>=60?"Chaotic good duo 🤝":p>=40?"Same planet, different orbit 🪐":"Opposites attract 🧲"}
+function duo(p){return p>=80?"Twin flames 🔥 no cap":p>=60?"Certified duo 🤝 big W":p>=40?"Same planet, different orbit 🪐":"Opposites attract 🧲 lowkey cooked"}
 
 function finish(){
   const {v,tr,arche}=score(state.a);
   show("#s-result");
   $("#big").textContent=arche.e;$("#arche").textContent=arche.n;$("#desc").textContent=arche.d;
-  $("#youlabel").textContent=(state.name?state.name+", your":"Your")+" vibe is";
+  $("#youlabel").textContent=(state.name?state.name+", it's":"It's")+" giving";
   const mx=Math.max(1,...v);
   $("#stats").innerHTML=AXN.map((n,i)=>`<div class="st"><span>${n}</span><div class="bar"><i data-w="${Math.round(v[i]/mx*100)}"></i></div><small>${v[i]}</small></div>`).join("");
-  $("#trivia").innerHTML=`Trivia: <b>${tr}/2</b> ${tr===2?"— certified smart 🎓":tr===1?"— not bad 👍":"— vibes over facts 💅"}`;
+  const TR=Q.filter(q=>q.a!==undefined).length;$("#trivia").innerHTML=`Trivia: <b>${tr}/${TR}</b> ${tr===TR?"— giga brain, no cap 🧠":tr===TR-1?"— mid-high, respectable 📈":tr>0?"— lowkey cooked 💀":"— vibes over facts 💅"}`;
   requestAnimationFrame(()=>requestAnimationFrame(()=>document.querySelectorAll("#stats i").forEach(i=>i.style.width=i.dataset.w+"%")));
   confetti();
   const vs=$("#vs");
@@ -272,8 +274,8 @@ function finish(){
     const p=match(state.a,friend.a);const fn=friend.name||"your friend";const fa=score(friend.a).arche;
     $("#vsTitle").textContent=`You × ${fn}`;
     $("#duo").textContent=`${duo(p)} · ${fn} is ${fa.n} ${fa.e}`;
-    $("#both").innerHTML=state.a.map((k,i)=>k===friend.a[i]?`<span style="animation-delay:${i*.08+1}s">${Q[i].o[k][0]} ${Q[i].o[k][1]}</span>`:"").join("")||`<span>You agreed on literally nothing 💀</span>`;
-    $("#chain").innerHTML=friend.hops>0?`🔗 This vibe check has hopped through <b>${friend.hops+1} friends</b> so far. Keep it going.`:`🔗 You're the first hop. Start the chain.`;
+    $("#both").innerHTML=state.a.map((k,i)=>k===friend.a[i]?`<span style="animation-delay:${i*.08+1}s">${Q[i].o[k][0]} ${Q[i].o[k][1]}</span>`:"").join("")||`<span>You agreed on literally nothing 💀 cooked</span>`;
+    $("#chain").innerHTML=friend.hops>0?`🔗 This vibe check has hopped through <b>${friend.hops+1} friends</b> so far. Keep the aura going.`:`🔗 You're the first hop. Start the chain, farm the aura.`;
     setTimeout(()=>{$("#ringp").style.strokeDashoffset=440-440*p/100;countUp($("#pct"),p,1600)},350);
     $("#share").textContent="Send it to another friend 📲";
   } else vs.hidden=true;
@@ -287,7 +289,7 @@ function shareLink(){
 }
 $("#share").onclick=async()=>{
   const url=shareLink(),arche=score(state.a).arche;
-  const text=`I'm a ${arche.n} ${arche.e} — take the vibe check and see how much we match 👀`;
+  const text=`I'm a ${arche.n} ${arche.e} — take the vibe check and see if we match, no cap 👀`;
   try{
     if(navigator.share)await navigator.share({title:"VIBECHECK",text,url});
     else{await navigator.clipboard.writeText(url);toast()}
