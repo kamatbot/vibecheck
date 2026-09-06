@@ -2,7 +2,7 @@
 # Run: /Applications/Blender.app/Contents/MacOS/Blender -b --python blender/make_avatars.py
 # Shared skeleton: head centre HC=(0,0,1.62) r=.30 so every accessory fits every base. Front = -Y.
 import bpy, math, os
-from mathutils import Vector
+from mathutils import Vector, Euler
 OUT=os.path.join(os.path.dirname(os.path.abspath(__file__)),"..")
 bpy.ops.wm.read_factory_settings(use_empty=True)
 S=bpy.context.scene
@@ -37,6 +37,18 @@ def limb(n,p0,p1,r0,r1,m):
     bpy.ops.mesh.primitive_cone_add(vertices=24,radius1=r0,radius2=r1,depth=d.length,location=(p0+p1)/2)
     o=bpy.context.object;o.rotation_mode="QUATERNION";o.rotation_quaternion=Vector((0,0,1)).rotation_difference(d)
     return [_fin(o,n,m),sphere(n+"0",p0,r0,m,seg=16),sphere(n+"1",p1,r1,m,seg=16)]
+K=.68  # metaball visible radius / element radius at threshold .3 (calibrated)
+def metaobj(name,m,res=.035):
+    bpy.ops.object.metaball_add(type="BALL",location=(0,0,HZ),radius=.001);o=bpy.context.object;o.name=name;o.data.name=name
+    o.data.resolution=res;o.data.threshold=.3;o.data.elements.remove(o.data.elements[0]);o.data.materials.append(m);return o
+def mball(o,loc,r,neg=False):
+    e=o.data.elements.new();e.type="BALL";e.co=(loc[0],loc[1],loc[2]-HZ);e.radius=r/K;e.stiffness=2;e.use_negative=neg;return e
+def mell(o,loc,semi,rot=(0,0,0)):
+    e=o.data.elements.new();e.type="ELLIPSOID";e.co=(loc[0],loc[1],loc[2]-HZ);e.radius=1;e.stiffness=2
+    e.size_x,e.size_y,e.size_z=[a/K for a in semi];e.rotation=Euler(rot).to_quaternion();return e
+def mfinish(o):
+    bpy.context.view_layer.update();bpy.ops.object.select_all(action="DESELECT");o.select_set(True);bpy.context.view_layer.objects.active=o
+    bpy.ops.object.convert(target="MESH");o=bpy.context.object;bpy.ops.object.shade_smooth();return o
 def join(parts,name):
     bpy.ops.object.select_all(action="DESELECT")
     for p in parts:p.select_set(True)
@@ -57,50 +69,70 @@ def hand(n,p,kind,d,side,m):
     elif kind=="point":finger(0)
     return P
 
-def avatar(name,sex,skin,iris,hair,haircol,body,pants,pose,extra,shoe):
+BROW={"hip":(0,.02),"peace":(.025,0),"rock":(0,.03),"point":(.02,-.005),"wave":(0,.02),"pockets":(-.01,-.01)}
+def avatar(name,sex,skin,iris,hair,haircol,body,pants,pose_name,extra,shoe):
+    pose=POSES[pose_name]
     sk=mat("skin_"+skin,hexc(SKIN[skin]),.5);hm=mat("hair_"+haircol,hexc(haircol),.45);om=mat("outfit",hexc("e63946"),.6)
     pm=om if pants=="jumpsuit" else mat("pants_"+pants,hexc({"jeans":"3b5fa8","dark":"2b2f3a","khaki":"c9b48a","black":"1b1b22","light":"7fb0e8"}[pants]),.7)
     W=1.25 if body=="chubby" else .92 if body=="slim" else 1.0   # width factor
     P=[]
-    # head
-    P.append(sphere("head",(0,0,HZ),HR,sk,(1,.92,1.12),32))
-    P.append(cyl("neck",(0,0,HZ-.34),.07,.14,sk))
-    for s in(-1,1):P.append(sphere("ear",(s*.29,.02,HZ-.02),.045,sk,(.5,.8,1),12))
-    # face: big eyes, iris, pupil, sparkle, thick brow, nose, blush
-    im=mat("iris_"+iris,hexc(IRIS[iris]),.3);dk=mat("dark",(.07,.06,.09),.35);wh=mat("eye_white",(1,1,1),.15)
+    # ---- sculpted head (metaballs blend into one smooth surface) ----
+    hd=metaobj("mb_head_"+name,sk)
+    mell(hd,(0,.01,HZ+.03),(.29,.27,.30))            # skull
+    mell(hd,(0,.03,HZ-.15),(.22,.19,.17))            # soft chin, kept behind the skull front
+    mball(hd,(0,-.262,HZ-.07),.022)                  # tiny button nose
+    hd=mfinish(hd);sc=.60/hd.dimensions.x;hd.scale=(sc,sc,sc);P.append(hd)
+    P.append(cyl("neck",(0,0,HZ-.36),.075,.16,sk))
     for s in(-1,1):
-        P.append(sphere("eye",(s*.11,-.245,HZ+.03),.075,wh,(1,.55,1.2)))
-        P.append(sphere("iris",(s*.11,-.285,HZ+.025),.045,im,(1,.6,1)))
-        P.append(sphere("pupil",(s*.11,-.305,HZ+.025),.024,dk,seg=12))
-        P.append(sphere("shine",(s*.09,-.325,HZ+.05),.012,wh,seg=8))
-        P.append(rbox("brow",(s*.115,-.25,HZ+.15),(.1,.025,.03),hm,rot=(0,0,s*.12)))
-        P.append(sphere("blush",(s*.19,-.2,HZ-.06),1,mat("blush",hexc("ff9aa8"),.9),(.035,.012,.022),12))
-        if sex=="f":P.append(rbox("lash",(s*.18,-.255,HZ+.08),(.05,.02,.015),dk,rot=(0,0,s*.6)))
-    P.append(sphere("nose",(0,-.29,HZ-.05),.028,sk,(1,.8,.9),12))
-    P.append(torus("smile",(0,-.22,HZ-.12),.055,.012,mat("mouth",(.6,.2,.25),.5),rot=(math.radians(55),0,0)))
-    # hair
-    def cap(r=.33,off=(0,.07,.05),sc=(1,.9,.95)):P.append(sphere("cap",(off[0],off[1],HZ+off[2]),r,hm,sc,32))
-    def fringe(x=0,z=.22,sc=(.28,.1,.08),rz=0):P.append(sphere("fringe",(x,-.2,HZ+z),1,hm,sc));P[-1].rotation_euler=(0,0,rz)
-    if hair=="swept":cap();fringe(-.06,.24,(.26,.12,.09),.35)
+        P.append(torus("ear",(s*.3,.02,HZ-.02),.03,.014,sk,rot=(0,math.pi/2,0)));P.append(sphere("earin",(s*.295,.03,HZ-.03),.024,sk,seg=12))
+    # ---- eyes: almond eyeball, rimmed iris, pupil, two sparkles, upper + lower lids ----
+    im=mat("iris_"+iris,hexc(IRIS[iris]),.3);rim=mat("iris_rim_"+iris,tuple(c*.45 for c in hexc(IRIS[iris])),.3)
+    dk=mat("dark",(.07,.06,.09),.35);wh=mat("eye_white",(1,1,1),.15)
+    raise_=BROW.get(pose_name,(0,0))
+    for i,s in enumerate((-1,1)):
+        ex=s*.12
+        P.append(sphere("eye",(ex,-.236,HZ+.005),.09,wh,(1.2,.5,1.05)))   # shallow lens, just proud of the face
+        P.append(sphere("rim",(s*.115,-.274,HZ-.005),.06,rim,(1,.45,1)))
+        P.append(sphere("iris",(s*.115,-.278,HZ-.005),.055,im,(1,.45,1)))
+        P.append(sphere("pupil",(s*.115,-.296,HZ-.005),.028,dk,seg=12))
+        P.append(sphere("shine",(s*.115-.02,-.314,HZ+.016),.015,wh,seg=10));P.append(sphere("shine2",(s*.115+.018,-.308,HZ-.02),.007,wh,seg=8))
+        if sex=="f":P.append(rbox("lash",(s*.19,-.255,HZ+.06),(.05,.02,.014),dk,rot=(0,0,s*.5)))
+        P.append(sphere("blush",(s*.19,-.215,HZ-.09),1,mat("blush",hexc("ff9aa8"),.9),(.04,.012,.024),12))
+        # arched brow: 4 blended balls, per-pose raise for expression
+        br=metaobj("mb_brow%d_"%i+name,hm,res=.01);rz=raise_[i]
+        for t,(x,z) in enumerate([(.05,.115),(.08,.135),(.11,.148),(.14,.152),(.17,.148),(.2,.135)]):
+            mball(br,(s*x,-.245+.006*t,HZ+z+rz),.017)
+        P.append(mfinish(br))
+    # ---- mouth: smile line + lower lip ----
+    P.append(torus("smile",(0,-.215,HZ-.15),.07,.011,mat("mouth",(.55,.18,.22),.5),rot=(math.radians(55),0,0)))
+    # ---- hair: blended metaball clumps ----
+    hr=metaobj("mb_hair_"+name,hm,res=.045)
+    def cap(semi=(.32,.30,.26),loc=(0,.06,HZ+.12)):mell(hr,loc,semi)
+    def fringe(x=0,z=.24,semi=(.25,.08,.06),ry=0,rz=0):mell(hr,(x,-.2,HZ+z),semi,(0,ry,rz))
+    if hair=="swept":
+        cap();fringe(-.05,.25,(.22,.09,.06),0,.35);mell(hr,(-.24,-.1,HZ+.18),(.08,.14,.1))
     elif hair=="messy":
         cap()
-        for i,(x,y,rz) in enumerate([(-.15,.0,.6),(.0,-.05,-.3),(.15,.0,-.7),(-.08,.12,1.2),(.1,.12,-1.4)]):
-            P.append(sphere("tuft",(x,y,HZ+.33),1,hm,(.13,.07,.06)));P[-1].rotation_euler=(0,.5,rz)
+        for (x,y,ry,rz) in [(-.16,-.02,.6,.4),(0,-.08,.2,-.3),(.16,-.02,-.6,-.5),(-.07,.12,.9,1.2),(.1,.12,-.9,-1.4),(0,-.18,.5,0)]:mell(hr,(x,y,HZ+.34),(.11,.06,.05),(0,ry,rz))
     elif hair=="curly":
-        cap(.3)
-        for i in range(14):
-            a=i/14*math.tau;z=.18 if i%2 else .3;P.append(sphere("curl",(math.cos(a)*.3,math.sin(a)*.26+.05,HZ+z),.09,hm,seg=12))
-    elif hair=="quiff":cap();P.append(sphere("quiff",(0,-.14,HZ+.36),1,hm,(.22,.13,.11)))
+        cap((.3,.28,.24))
+        for i in range(16):
+            a=i/16*math.tau;z=.22 if i%2 else .34;r_=.3 if i%2 else .2;mball(hr,(math.cos(a)*r_,math.sin(a)*r_*.9+.06,HZ+z),.085)
+    elif hair=="quiff":cap();mell(hr,(0,-.12,HZ+.36),(.2,.12,.11),(.5,0,0))
     elif hair=="long":
-        cap(.34);fringe(.0,.22,(.26,.1,.07),.15)
-        for s in(-1,1):P.append(rbox("side",(s*.3,.06,HZ-.15),(.1,.3,.55),hm))
-        P.append(rbox("back",(0,.3,HZ-.2),(.5,.12,.6),hm))
+        cap((.33,.31,.27));fringe(0,.24,(.24,.08,.06),0,.15)
+        for s in(-1,1):mell(hr,(s*.28,.05,HZ-.15),(.09,.16,.32))
+        mell(hr,(0,.28,HZ-.12),(.28,.1,.32))
     elif hair=="ponytail":
-        cap();P.append(sphere("tie",(0,.16,HZ+.33),.1,hm));P.extend(limb("tail",(0,.2,HZ+.3),(0,.36,HZ-.15),.08,.035,hm))
-    elif hair=="bob":cap(.36,(0,.05,.0),(1,.95,.95));fringe(0,.24,(.3,.1,.08))
+        cap();mball(hr,(0,.2,HZ+.3),.09)
+        for t,(y,z,r_) in enumerate([(.26,.22,.075),(.32,.1,.065),(.36,-.03,.055),(.38,-.16,.045)]):mball(hr,(0,y,HZ+z),r_)
+    elif hair=="bob":
+        cap((.36,.33,.29),(0,.06,HZ+.06));fringe(0,.24,(.28,.09,.06))
+        for s in(-1,1):mell(hr,(s*.29,.06,HZ-.12),(.1,.2,.16))
     elif hair=="bun":
-        cap();fringe(.05,.23,(.26,.1,.08),-.3);P.append(sphere("bun",(0,.2,HZ+.3),.11,hm))
-        P.append(sphere("bow",(-.1,.2,HZ+.36),1,mat("bow",hexc("e63946"),.6),(.06,.03,.04)));P.append(sphere("bow2",(.1,.2,HZ+.36),1,mat("bow",hexc("e63946"),.6),(.06,.03,.04)))
+        cap();fringe(.05,.24,(.24,.08,.06),0,-.3);mball(hr,(0,.2,HZ+.32),.11)
+        P.append(sphere("bow",(-.1,.2,HZ+.38),1,mat("bow",hexc("e63946"),.6),(.06,.03,.04)));P.append(sphere("bow2",(.1,.2,HZ+.38),1,mat("bow",hexc("e63946"),.6),(.06,.03,.04)))
+    P.append(mfinish(hr))
     # torso / top
     tw=.5*W;shoulder=Vector((tw/2,0,1.2))
     P.append(rbox("top",(0,0,1.06),(tw,.28*W,.44),om))
@@ -146,7 +178,7 @@ AV=[("avatar_m1","m","light","green","swept","1d1b22","chubby","khaki","relaxed"
     ("avatar_f2","f","dark","violet","ponytail","111111","avg","jumpsuit","hips2","","ff4d8d"),
     ("avatar_f3","f","medium","blue","bob","3b2a20","slim","light","point","jacket","2ecc71"),
     ("avatar_f4","f","tan","hazel","bun","6b3a1e","avg","dark","rock","hoodie","111827")]
-avatars=[avatar(a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],POSES[a[8]],a[9],a[10]) for a in AV]
+avatars=[avatar(*a) for a in AV]
 
 # accessories around the shared head (HR=.30 at HZ)
 dark=mat("glass_dark",(.05,.05,.08),.15);gold=mat("metal_gold",hexc("ffb32c"),.3,.8);black=mat("cap_black",(.08,.08,.1),.6)
@@ -174,4 +206,6 @@ w=bpy.data.worlds.new("w");S.world=w;w.use_nodes=True;w.node_tree.nodes["Backgro
 S.render.engine="BLENDER_EEVEE"
 S.render.resolution_x=1800;S.render.resolution_y=560
 S.render.filepath=os.path.join(OUT,"blender","preview.png");bpy.ops.render.render(write_still=True)
+bpy.ops.object.camera_add(location=(0,-6,HZ+.02),rotation=(math.radians(90),0,0));fc=bpy.context.object;fc.data.type="ORTHO";fc.data.ortho_scale=9.6;S.camera=fc
+S.render.resolution_x=2000;S.render.resolution_y=420;S.render.filepath=os.path.join(OUT,"blender","faces.png");bpy.ops.render.render(write_still=True)
 print("DONE avatars=%d accs=%d"%(len(avatars),len(acc)))
