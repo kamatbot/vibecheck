@@ -156,6 +156,7 @@ canvas#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-in
   </div>
   <div class="actions">
     <button class="btn primary pulse" id="share">Send to a friend 📲</button>
+    <button class="btn ghost" id="pass">Friend plays on this phone 📱</button>
     <button class="btn ghost" id="again">Redo mine 🔁</button>
   </div>
   <div class="foot">Share the link. Your friend plays, then sees your match % — and passes it on.</div>
@@ -196,13 +197,14 @@ function readHash(){
   if(a.length!==Q.length||a.some(x=>isNaN(x)||x<0||x>3))return null;
   return {a,name:(p.get("n")||"").slice(0,14),hops:Math.min(999,+(p.get("h")||0)||0)};
 }
-const friend=readHash();
-if(friend){
+let friend=readHash();
+function applyFriend(){
   const el=$("#invite");el.hidden=false;
   el.querySelector("span").textContent=(friend.name||"A friend")+" wants to see if you match";
   $("#start").textContent="Accept the challenge 🔥";
   document.title=(friend.name||"A friend")+" sent you a vibe check";
 }
+if(friend)applyFriend();
 
 // floating emoji bg
 (function(){
@@ -216,6 +218,8 @@ if(friend){
 function show(id){document.querySelectorAll(".screen").forEach(s=>s.classList.remove("on"));$(id).classList.add("on");scrollTo(0,0)}
 $("#start").onclick=()=>{state.name=$("#name").value.trim();state.i=0;state.a=[];show("#s-quiz");renderQ()};
 $("#again").onclick=()=>{state.i=0;state.a=[];show("#s-quiz");renderQ()};
+// pass the phone: current player becomes the "friend", player two takes the intro path
+$("#pass").onclick=()=>{friend={a:state.a.slice(),name:state.name,hops:friend?friend.hops+1:0};applyFriend();$("#name").value="";$("#name").placeholder="Friend's name or nickname";show("#s-intro");$("#name").focus()};
 
 function renderQ(){
   const q=Q[state.i];
