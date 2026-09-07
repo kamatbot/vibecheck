@@ -139,9 +139,6 @@ button:disabled{opacity:.45;cursor:default}
 #introPreview>p{font-size:13px;color:var(--muted);text-align:center;margin:0}
 #introPreview .stage{height:280px;margin:0}
 #introPreview .hint{bottom:0}
-.opts.preference-options{grid-template-columns:1fr;gap:10px}
-.preference-options .opt{aspect-ratio:auto;min-height:68px;padding:16px 20px;text-align:left;align-items:flex-start;font-size:18px;line-height:1.3}
-#swapQuestion{margin-top:18px}
 .snapshot-axis{padding:12px 0;border-bottom:1px solid var(--line);text-align:left;overflow-wrap:anywhere}
 .snapshot-axis:last-child{border-bottom:0}
 .snapshot-axis strong{display:block;font-size:17px}
@@ -181,7 +178,7 @@ button:disabled{opacity:.45;cursor:default}
     <input class="name" id="name" maxlength="14" placeholder="Your name or nickname (optional)" autocomplete="off">
     <div class="seg" id="gender"><button data-g="m">👦 He</button><button data-g="f">👧 She</button><button data-g="x" class="on">✨ Surprise me</button></div>
     <p class="notice" id="linkNotice" hidden></p><button class="btn ghost" id="viewChain" hidden>View the full group</button><button class="btn ghost" id="newChainIntro" hidden>Start a new chain</button>
-    <button class="btn ghost" id="newEdition" hidden>Start a new quiz edition</button>
+    <button class="btn ghost" id="newEdition" hidden>Start a classic quiz</button>
     <button class="btn primary pulse" id="start">Lock in 🔒</button>
   </div>
   <div class="foot">No account. No tracking. No cap. Your answers live only in the link you share.</div>
@@ -192,9 +189,7 @@ button:disabled{opacity:.45;cursor:default}
   <div class="top"><div class="bar"><i id="prog"></i></div><span class="count" id="count">1/12</span></div>
   <div class="tag" id="tag"></div>
   <h2 class="q" id="qtext"></h2>
-  <p class="sub" id="questionInstruction" hidden>Pick what usually fits you. No right answers.</p>
   <div class="opts" id="opts"></div>
-  <button class="btn ghost" id="swapQuestion" hidden>Try a different question ↻</button><p class="notice" id="questionNotice" role="status" hidden></p>
 </section>
 
 <!-- RESULT -->
@@ -222,7 +217,6 @@ button:disabled{opacity:.45;cursor:default}
   <p class="notice" id="fullNotice" hidden>This chain is full at 64 people. You can still share the whole group.</p><button class="btn ghost" id="newChain" hidden>Start a new chain</button>
   <div class="actions">
     <button class="btn primary pulse" id="share">Send to a friend 📲</button>
-    <button class="btn ghost" id="remix" hidden>Remix my look ✨</button>
     <button class="btn ghost" id="pass">Friend plays on this phone 📱</button>
   </div>
   <div class="foot">Send the link. Every friend stays in the group as the next person joins. Aura farming, but wholesome.</div>
@@ -265,32 +259,42 @@ $("#gender").onclick=e=>{const b=e.target.closest("button");if(!b)return;state.g
 
 // ---- group from URL ----
 const incomingLink=PreferenceQuiz.read(location.hash);
-let edition=incomingLink.edition,panel=incomingLink.panel;
+let edition=incomingLink.members.length?incomingLink.edition:"legacy",panel=incomingLink.panel;
 let incomingMembers=incomingLink.members,viewingFull=false;
 function memberName(p,i){return p.name||`Player ${i+1}`}
 function completedGroup(){
-  if(viewingFull)return incomingMembers.map(p=>({...p,a:p.a.slice(),...(p.q?{q:p.q.slice(),r:p.r.slice()}:{} )}));
-  return edition==="preferences"?PreferenceQuiz.append(incomingMembers,PreferenceQuiz.member(state.session,state.responses,state.name,state.gender,state.style)):VibeChain.append(incomingMembers,{a:state.a,name:state.name,g:state.gender});
+  if(viewingFull||edition==="preferences")return incomingMembers.map(p=>({...p,a:p.a.slice(),...(p.q?{q:p.q.slice(),r:p.r.slice()}:{} )}));
+  return VibeChain.append(incomingMembers,{a:state.a,name:state.name,g:state.gender});
 }
 function applyGroup(){
-  $("#s-intro .sub").textContent=edition==="preferences"?"12 picks from 80 questions. No right answers. Find your vibe, then meet your crew.":"12 questions. 60 seconds. Find your vibe, then see if your friends actually match. No cap.";
-  $("#newEdition").hidden=edition!=="legacy";
-  const n=incomingMembers.length,full=n>=VibeChain.MAX_MEMBERS;
+  const n=incomingMembers.length,full=n>=VibeChain.MAX_MEMBERS,readOnly=edition==="preferences";
+  $("#s-intro .sub").textContent=readOnly?"This group used an earlier quiz. View the saved group, or start a classic quiz.":"12 questions. 60 seconds. Find your vibe, then see if your friends actually match. No cap.";
+  $("#newEdition").hidden=!readOnly;
   $("#invite").hidden=!n;
-  $("#invite").querySelector("span").textContent=n?`Join ${memberName(incomingMembers[0],0)}'s group · ${n} ${n===1?"person":"people"} so far`:"";
-  $("#start").disabled=full;$("#start").textContent=n?"Join the crew 🔥":"Lock in 🔒";
+  $("#invite").querySelector("span").textContent=n?`${readOnly?"Saved group:":"Join"} ${memberName(incomingMembers[0],0)}'s group · ${n} ${n===1?"person":"people"}${readOnly?"":" so far"}`:"";
+  $("#start").disabled=full||readOnly;$("#start").hidden=readOnly;$("#start").textContent=n?"Join the crew 🔥":"Lock in 🔒";
+  $("#name").hidden=readOnly;$("#gender").hidden=readOnly;
   $("#linkNotice").hidden=!full&&!incomingLink.error;
   $("#linkNotice").textContent=full?"This chain is full at 64 people. View the group or start a new chain.":incomingLink.error||"";
-  $("#viewChain").hidden=!full;$("#newChainIntro").hidden=!full;
+  $("#viewChain").hidden=!full&&!readOnly;$("#viewChain").textContent=readOnly?"View the saved group":"View the full group";$("#newChainIntro").hidden=!full||readOnly;
   document.title=n?memberName(incomingMembers[0],0)+" sent you a vibe check":"VIBECHECK";
 }
 function newChain(){
-  incomingMembers=[];viewingFull=false;incomingLink.error=null;edition="preferences";panel=PreferenceQuiz.newPanel();
+  incomingMembers=[];viewingFull=false;incomingLink.error=null;edition="legacy";
   history.replaceState(null,"",location.pathname+location.search);state.a=[];state.name="";$("#name").value="";
   applyGroup();show("#s-intro");
 }
 $("#newEdition").onclick=newChain;$("#newChain").onclick=newChain;$("#newChainIntro").onclick=newChain;
-$("#viewChain").onclick=()=>{viewingFull=true;show("#s-result");$("#card").hidden=true;renderGroup(incomingMembers)};
+function viewSavedGroup(){
+  viewingFull=true;show("#s-result");$("#card").hidden=incomingMembers.length!==1;
+  if(edition==="preferences"&&incomingMembers.length===1){
+    const person=incomingMembers[0];$("#youlabel").textContent=`${memberName(person,0)}'s saved preferences`;
+    $("#arche").textContent="Your vibe snapshot";$("#desc").textContent="A quick preference snapshot, not a fixed personality type.";$("#trivia").textContent="Saved from an earlier quiz edition.";
+    renderSnapshot(PreferenceQuiz.profile(person));
+  }
+  renderGroup(incomingMembers);
+}
+$("#viewChain").onclick=viewSavedGroup;
 applyGroup();
 
 // floating emoji bg
@@ -309,17 +313,13 @@ function shuffledQuestions(random=Math.random){
   return order;
 }
 function startQuiz(){
-  if(incomingMembers.length>=VibeChain.MAX_MEMBERS)return;
-  viewingFull=false;state.name=Array.from($("#name").value.trim()).slice(0,14).join("");state.i=0;state.a=[];
-  if(edition==="preferences"){
-    try{state.session=PreferenceQuiz.createSession(panel,incomingMembers);state.responses=[];state.style=PreferenceQuiz.newStyle()}
-    catch{ $("#linkNotice").hidden=false;$("#linkNotice").textContent="Your questions couldn't load this time. Tap Start to try again.";$("#start").textContent="Start · try again ↻";return }
-  }else state.order=shuffledQuestions();
-  show("#s-quiz");renderQ();
+  if(edition==="preferences"||incomingMembers.length>=VibeChain.MAX_MEMBERS)return;
+  viewingFull=false;state.name=Array.from($("#name").value.trim()).slice(0,14).join("");state.i=0;state.a=[];state.order=shuffledQuestions();show("#s-quiz");renderQ();
 }
 $("#start").onclick=startQuiz;
 // Advance the chain only when a new player takes the phone.
 function passPhone(){
+  if(edition==="preferences")return;
   const group=completedGroup();if(group.length>=VibeChain.MAX_MEMBERS)return;
   incomingMembers=group;state.a=[];state.name="";viewingFull=false;applyGroup();
   $("#name").value="";$("#name").placeholder="Friend's name or nickname";$("#gender").lastElementChild.click();show("#s-intro");$("#name").focus();
@@ -327,15 +327,6 @@ function passPhone(){
 $("#pass").onclick=passPhone;
 
 function renderQ(){
-  $("#questionInstruction").hidden=edition!=="preferences";
-  $("#questionNotice").hidden=true;$("#swapQuestion").hidden=edition!=="preferences";$("#swapQuestion").disabled=false;
-  if(edition==="preferences"){
-    const q=PreferenceQuiz.question(state.session,state.i);
-    $("#prog").style.width=(state.i/12*100)+"%";$("#count").textContent=(state.i+1)+"/12";
-    $("#tag").textContent=q.context.replace(/_/g," ");$("#qtext").textContent=q.prompt;
-    const box=$("#opts");box.className="opts preference-options";box.replaceChildren();
-    q.options.forEach((o,k)=>{const b=document.createElement("button");b.className="opt";b.textContent=o.text;b.onclick=()=>pick(k,b);box.appendChild(b)});return;
-  }
   const q=Q[state.order[state.i]];
   $("#prog").style.width=(state.i/Q.length*100)+"%";
   $("#count").textContent=(state.i+1)+"/"+Q.length;
@@ -343,17 +334,10 @@ function renderQ(){
   const box=$("#opts");box.className="opts";box.innerHTML="";
   q.o.forEach((o,k)=>{const b=document.createElement("button");b.className="opt";b.innerHTML=`<em>${o[0]}</em><span>${o[1]}</span>`;b.onclick=()=>pick(k,b);box.appendChild(b)});
 }
-$("#swapQuestion").onclick=()=>{
-  if(busy||edition!=="preferences")return;
-  try{state.session=PreferenceQuiz.swap(state.session,state.i,state.responses);renderQ()}
-  catch{$("#questionNotice").hidden=false;$("#questionNotice").textContent="No more swaps for this spot. You can answer if one fits, or leave the quiz unfinished."}
-};
 let busy=false;
 function pick(k,btn){
-  if(busy)return;busy=true;
-  if(edition==="preferences"){
-    const q=PreferenceQuiz.question(state.session,state.i);state.responses.push({question_id:q.id,question_version:1,option_id:q.options[k].id});$("#swapQuestion").disabled=true;
-  }else state.a[state.order[state.i]]=k;
+  if(busy||edition==="preferences")return;busy=true;
+  state.a[state.order[state.i]]=k;
   btn.classList.add("pick");[...btn.parentNode.children].forEach(c=>c!==btn&&c.classList.add("dim"));
   if(navigator.vibrate)navigator.vibrate(12);
   $("#prog").style.width=((state.i+1)/Q.length*100)+"%";
@@ -378,12 +362,6 @@ function match(a,b){
 function duo(p){return p>=80?"Twin flames 🔥 no cap":p>=60?"Certified duo 🤝 big W":p>=40?"Same planet, different orbit 🪐":"Opposites attract 🧲 lowkey cooked"}
 
 function finish(){
-  if(edition==="preferences"){
-    const group=completedGroup(),person=group[group.length-1];show("#s-result");$("#card").hidden=false;
-    $("#youlabel").textContent=state.name?`${state.name}'s preferences`:"A little more you";
-    $("#arche").textContent="Your vibe snapshot";$("#desc").textContent="A quick preference snapshot, not a fixed personality type.";$("#trivia").textContent="Early quiz edition · still being tested.";
-    renderSnapshot(PreferenceQuiz.profile(person));renderGroup(group);confetti();return;
-  }
   const {v,tr,arche}=score(state.a);
   show("#s-result");$("#card").hidden=false;
   $("#arche").textContent=arche.n+" "+arche.e;$("#desc").textContent=arche.d;
@@ -422,11 +400,9 @@ function renderPreferenceGroup(group){
     dynamics.suggestions.forEach(suggestion=>{const chip=document.createElement("span");chip.textContent=suggestion;$("#both").appendChild(chip)});
   }
 }
-$("#remix").onclick=()=>{if(edition!=="preferences"||viewingFull)return;state.style=PreferenceQuiz.newStyle();renderGroup(completedGroup())};
 let pairAnimation=0,castMembers=[];
 function renderGroup(group){
   const token=++pairAnimation,n=group.length,vs=$("#vs"),stage=$(".stage"),pair=n===2;
-  $("#remix").hidden=edition!=="preferences"||viewingFull;
   $("#app").classList.toggle("group-view",n>=3);
   $("#pairring").hidden=!pair;$("#groupDetails").hidden=n<3;
   $("#ringp").style.strokeDashoffset=440;$("#pct").textContent="0";
@@ -434,9 +410,10 @@ function renderGroup(group){
   vs.hidden=n<2; if(n>1)vs.prepend(stage);else $("#card").prepend(stage);
   $("#castInfo").hidden=n<2;$("#castLabels").hidden=n<2;
   if(n>=3)stage.after($("#castLabels"));else $("#castInfo").prepend($("#castLabels"));
-  $("#fullNotice").hidden=n<VibeChain.MAX_MEMBERS;$("#newChain").hidden=n<VibeChain.MAX_MEMBERS;
-  $("#pass").disabled=n>=VibeChain.MAX_MEMBERS;
-  $("#share").textContent=n>1?"Share the whole group 📲":"Send to a friend 📲";
+  $("#fullNotice").hidden=n<VibeChain.MAX_MEMBERS;$("#newChain").hidden=n<VibeChain.MAX_MEMBERS&&edition!=="preferences";$("#newChain").textContent=edition==="preferences"?"Start a classic quiz":"Start a new chain";
+  $("#pass").hidden=edition==="preferences";$("#pass").disabled=n>=VibeChain.MAX_MEMBERS||edition==="preferences";
+  $("#share").textContent=edition==="preferences"?"Share saved group 📲":n>1?"Share the whole group 📲":"Send to a friend 📲";
+  $("#s-result>.foot").textContent=edition==="preferences"?"This saved group stays as it was. Start a classic quiz to make a new chain.":"Send the link. Every friend stays in the group as the next person joins. Aura farming, but wholesome.";
   let shared=[];
   if(edition==="preferences")renderPreferenceGroup(group);
   else if(pair){
@@ -452,7 +429,7 @@ function renderGroup(group){
   }
   shared.forEach(i=>{const chip=document.createElement("span");chip.textContent=Q[i].o[group[0].a[i]][0]+" "+Q[i].o[group[0].a[i]][1];$("#both").appendChild(chip)});
   if(edition!=="preferences"&&!shared.length){const chip=document.createElement("span");chip.textContent=n>=3?"No unanimous picks yet. Different tastes, one crew ✨":"Different picks, plenty of personality ✨";$("#both").appendChild(chip)}
-  $("#chain").textContent=`🔗 ${n} ${n===1?"person":"people"} in this chain. Share the newest link to bring everyone along.`;
+  $("#chain").textContent=edition==="preferences"?"Saved group · you can share this earlier edition or start a classic quiz.":`🔗 ${n} ${n===1?"person":"people"} in this chain. Share the newest link to bring everyone along.`;
   $("#roster").replaceChildren();group.forEach((p,i)=>{const li=document.createElement("li"),small=document.createElement("small");li.textContent=`${i+1}. ${memberName(p,i)}`;small.textContent=edition==="preferences"?"Vibe snapshot":score(p.a).arche.n;li.appendChild(small);$("#roster").appendChild(li)});
   castMembers=group;renderCast();
 }
@@ -479,7 +456,7 @@ function shareLink(){
 }
 $("#share").onclick=async()=>{
   let url;try{url=shareLink()}catch(e){$("#fullNotice").hidden=false;$("#fullNotice").textContent=e.message;return}
-  const text="Join our vibe check — this link keeps the whole group 👀";
+  const text=edition==="preferences"?"Our saved vibe group 👀":"Join our vibe check — this link keeps the whole group 👀";
   try{
     if(navigator.share)await navigator.share({title:"VIBECHECK",text,url});
     else{await navigator.clipboard.writeText(url);toast()}

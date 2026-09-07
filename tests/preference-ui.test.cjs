@@ -8,33 +8,29 @@ function harness(hash=''){
  vm.runInContext(part('// axes:','$("#gender").onclick')+part('// ---- group from URL ----','// floating emoji bg')+part('function shuffledQuestions(', '// ---- scoring ----')+part('function score(a){','// ---- share ----')+part('function shareLink(){','$("#share").onclick')+part('function seed(str){','const AVATARS=')+part('const pool=g=>','// which attributes'),ctx);
  return {ctx,$,adapter,run:s=>vm.runInContext(s,ctx),flush(){while(timers.length)timers.shift()()}};
 }
-function complete(h){h.run('startQuiz()');for(let i=0;i<12;i++){const button=h.$('#opts').children[i%4];button.onclick();h.flush()}}
-function allText(n){return [n.textContent,...n.children.map(allText)].join(' ')}
-test('fresh edition asks 12 bank questions by option ID and shows independent snapshot bands',()=>{
- const h=harness();assert.equal(h.run('edition'),'preferences');assert.equal(h.$('#s-intro .sub').textContent,'12 picks from 80 questions. No right answers. Find your vibe, then meet your crew.');h.$('#name').value='<b>Sam</b>';complete(h);
- const group=h.run('completedGroup()');assert.equal(group.length,1);assert.equal(group[0].q.length,12);assert.equal(h.run('state.responses.length'),12);assert.equal(h.$('#arche').textContent,'Your vibe snapshot');assert.equal(h.$('#stats').children.length,4);assert.equal(h.$('#trivia').textContent,'Early quiz edition · still being tested.');assert.equal(h.$('#youlabel').textContent,"<b>Sam</b>'s preferences");assert.equal(h.$('#remix').hidden,false);
- assert.match(h.run('shareLink()'),/#v=3&c=/);assert.equal(PreferenceQuiz.read(h.run('shareLink()').split('https://example.test/')[1]).members.length,1);assert.equal(h.ctx.built.length,1);
+test('fresh and invalid links use the original 12-question emoji quiz and V2 sharing',()=>{
+ for(const hash of ['', '#v=3&c=broken']){
+  const h=harness(hash);assert.equal(h.run('edition'),'legacy');assert.equal(h.$('#newEdition').hidden,true);h.run('startQuiz()');assert.equal(h.$('#opts').className,'opts');assert.match(h.$('#opts').children[0].innerHTML,/<em>.*<\/em><span>/);assert.equal(h.run('state.order.length'),12);
+  h.run('state.a=Array(12).fill(0)');assert.match(h.run('shareLink()'),/#v=2&c=/);
+ }
+ assert.doesNotMatch(html,/id="swapQuestion"|id="questionInstruction"|id="remix"|PreferenceQuiz\.createSession|PreferenceQuiz\.swap|PreferenceQuiz\.member/);
 });
-test('question context stays neutral, swapping changes unanswered item and records no answer',()=>{
- const h=harness();h.run('startQuiz()');assert.doesNotMatch(h.$('#tag').textContent,/_/);assert.equal(h.$('#swapQuestion').hidden,false);assert.equal(h.$('#questionInstruction').hidden,false);
- const before=h.run('PreferenceQuiz.question(state.session,state.i).id');h.$('#swapQuestion').onclick();assert.equal(h.run('state.responses.length'),0);
- const after=h.run('PreferenceQuiz.question(state.session,state.i).id');assert.notEqual(before,after);
- h.adapter.swap=()=>{throw Error('untrusted failure')};h.$('#swapQuestion').onclick();assert.equal(h.$('#questionNotice').hidden,false);assert.equal(h.$('#questionNotice').textContent,'No more swaps for this spot. You can answer if one fits, or leave the quiz unfinished.');assert.equal(h.run('state.responses.length'),0);
+function savedGroup(count){
+ const session=PreferenceQuiz.createSession('A',[]),responses=Array.from({length:12},(_,i)=>{const q=PreferenceQuiz.question(session,i);return {question_id:q.id,question_version:1,option_id:q.options[i%4].id}});
+ const person=PreferenceQuiz.member(session,responses,'<b>Saved</b>','x',Array(12).fill(0));
+ return Array.from({length:count},(_,i)=>({...person,name:i?`Saved ${i+1}`:person.name,a:person.a.slice(),q:person.q.slice(),r:person.r.slice()}));
+}
+for(const count of [1,2,9,64])test(`V3 saved ${count}-person group is read-only and preserves all profiles`,()=>{
+ const group=savedGroup(count),hash=PreferenceQuiz.write(group,'A'),h=harness(hash),before=JSON.stringify(h.run('incomingMembers'));
+ assert.equal(h.run('edition'),'preferences');assert.equal(h.$('#s-intro .sub').textContent,'This group used an earlier quiz. View the saved group, or start a classic quiz.');assert.equal(h.$('#start').hidden,true);assert.equal(h.$('#start').disabled,true);assert.equal(h.$('#viewChain').hidden,false);assert.equal(h.$('#newEdition').hidden,false);
+ h.run('startQuiz();passPhone()');assert.equal(h.run('state.a.length'),0);assert.equal(JSON.stringify(h.run('incomingMembers')),before);
+ h.$('#viewChain').onclick();assert.equal(h.$('#card').hidden,count!==1);assert.equal(h.$('#share').textContent,'Share saved group 📲');assert.equal(h.$('#s-result>.foot').textContent,'This saved group stays as it was. Start a classic quiz to make a new chain.');assert.equal(h.$('#pass').hidden,true);assert.equal(h.$('#newChain').hidden,false);assert.equal(h.$('#fullNotice').hidden,count!==64);assert.equal(h.$('#pairring').hidden,true);assert.equal(h.ctx.built.length,Math.min(8,count));assert.equal(h.$('#roster').children.length,count);
+ if(count===1){assert.equal(h.$('#arche').textContent,'Your vibe snapshot');assert.equal(h.$('#stats').children.length,4);assert.equal(h.$('#youlabel').textContent,"<b>Saved</b>'s saved preferences")}
+ if(count===2){assert.equal(h.$('#energy').children.length,4);assert.match(h.$('#duo').textContent,/not a friendship prediction/)}
+ if(count>=3){assert.equal(h.$('#energy').children.length,4);assert.match(h.$('#duo').textContent,new RegExp(`${count} people`))}
+ assert.equal(h.run('shareLink()'),'https://example.test/'+hash);assert.equal(JSON.stringify(h.run('incomingMembers')),before);assert.equal(JSON.stringify(h.run('completedGroup()')),JSON.stringify(group));
+ h.run('completedGroup()[0].q[0]=79');assert.equal(JSON.stringify(h.run('incomingMembers')),before);
 });
-test('generation failure exposes retry instead of entering an empty session',()=>{
- const h=harness();h.adapter.createSession=()=>{throw Error('failed')};h.run('startQuiz()');assert.equal(h.$('#linkNotice').hidden,false);assert.match(h.$('#start').textContent,/try again/);assert.equal(h.$('#opts').children.length,0);
- h.adapter.createSession=PreferenceQuiz.createSession;h.run('startQuiz()');assert.equal(h.$('#opts').children.length,4);
-});
-test('pair uses descriptions and group uses independent distributions for every person',()=>{
- const h=harness();complete(h);h.run('passPhone()');complete(h);assert.equal(h.$('#pairring').hidden,true);assert.equal(h.$('#energy').children.length,4);assert.match(h.$('#duo').textContent,/not a friendship prediction/);assert.doesNotMatch(allText(h.$('#energy')),/%/);
- h.run('passPhone()');complete(h);assert.equal(h.$('#vsTitle').textContent,'Group dynamics');assert.match(h.$('#duo').textContent,/3 people/);assert.equal(h.$('#energy').children.length,4);assert.equal(h.$('#closest').textContent,'');assert.equal(h.$('#roster').children.length,3);assert.match(allText(h.$('#roster')),/Vibe snapshot/);
-});
-test('remix alters cosmetics only while shared history and preference profile remain stable',()=>{
- const h=harness();complete(h);h.run('passPhone()');complete(h);
- const before=JSON.stringify(h.run('incomingMembers')),profile=JSON.stringify(h.run('PreferenceQuiz.profile(completedGroup()[1])')),answers=JSON.stringify(h.run('state.responses'));
- h.adapter.newStyle=()=>Array(12).fill(3);h.$('#remix').onclick();assert.equal(JSON.stringify(h.run('incomingMembers')),before);assert.equal(JSON.stringify(h.run('state.responses')),answers);assert.equal(JSON.stringify(h.run('PreferenceQuiz.profile(completedGroup()[1])')),profile);assert.deepEqual(Array.from(h.run('completedGroup()[1].a')),Array(12).fill(3));
-});
-test('legacy links retain original questions and scoring until explicit edition reset',()=>{
- const h=harness(VibeChain.write([{a:Array(12).fill(0),name:'Old friend',g:'x'}]));assert.equal(h.run('edition'),'legacy');assert.equal(h.$('#newEdition').hidden,false);h.run('startQuiz()');assert.equal(h.$('#swapQuestion').hidden,true);assert.equal(h.$('#questionInstruction').hidden,true);assert.match(h.$('#s-intro .sub').textContent,/actually match/);assert.equal(h.run('state.order.length'),12);assert.equal(h.run('incomingMembers.length'),1);
- h.$('#newEdition').onclick();assert.equal(h.run('edition'),'preferences');assert.equal(h.run('incomingMembers.length'),0);assert.equal(h.$('#newEdition').hidden,true);
+test('explicit Start a classic quiz clears V3 history and restores joining without scale mixing',()=>{
+ const h=harness(PreferenceQuiz.write(savedGroup(2),'A'));h.$('#newEdition').onclick();assert.equal(h.run('edition'),'legacy');assert.equal(h.run('incomingMembers.length'),0);assert.equal(h.$('#start').hidden,false);assert.equal(h.$('#name').hidden,false);assert.equal(h.$('#newEdition').hidden,true);assert.equal(h.$('#viewChain').hidden,true);h.run('startQuiz()');assert.equal(h.run('state.order.length'),12);assert.equal(h.$('#opts').className,'opts');h.run('state.a=Array(12).fill(0);renderGroup(completedGroup())');assert.equal(h.$('#share').textContent,'Send to a friend 📲');assert.match(h.$('#s-result>.foot').textContent,/Every friend stays in the group/);
 });

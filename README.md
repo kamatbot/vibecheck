@@ -1,10 +1,8 @@
 # VIBECHECK
 
-A playful 12-question preference quiz for 10–18 year olds. Discover a vibe snapshot, remix your 3D character, then send the link: each friend plays and joins the chain. Two people compare preferences; three or more see group dynamics. No backend, no accounts. Your answers live only in the link you share.
+A quick 12-question vibe quiz with big emoji answer tiles. Find your character, share the link, and let friends join the group. Two people see a match score; three or more see group dynamics. No backend, no accounts.
 
 ## Run
-
-Any static server:
 
 ```bash
 python3 -m http.server 8791
@@ -12,42 +10,35 @@ python3 -m http.server 8791
 
 Open http://localhost:8791.
 
-The opening page previews four characters. New chains draw 12 questions from an 80-item candidate preference bank with playful, teen-friendly wording: one per facet across Chaos, Chill, Plan and Social. Four anchor items are shared within a chain; eight variable items favor questions that friends have not seen. Question order is interleaved and option direction varies between sessions. There are no right answers or scored trivia in this edition.
+## Current experience
 
-## How the viral loop works
-
-- Each friend opens the newest link, plays, and shares a new link containing the previous people plus themselves. Sharing repeatedly does not duplicate the player. “Friend plays on this phone” advances the same chain locally.
-- Two players see descriptive comparisons of their quiz preferences. Three or more see counts across each preference axis and suggestions for activities together. Axes are independent; they do not sum to 100. These are unvalidated candidate snapshots, not a friendship prediction or permanent personality type.
-- Everyone contributes to group summaries; the first eight participants remain the visible 3D cast, without paging. Chains support 64 completed participants and a 16 KiB fragment. A full chain offers an explicit start-new-chain action.
-- “Try another question” replaces an unfamiliar item within the same facet while keeping the session balanced. If no replacement fits, the current question remains and an explanatory message appears.
-- Cosmetic choices are independent of preference answers. “Remix my look” changes only the current player's appearance, preserving their responses and earlier participants.
-- Links are snapshots: forward the newest link to bring everyone along. Separate branches do not automatically merge or update older links.
-- Old V1/V2 links continue on their original trivia/taste quiz and scoring. They are never reinterpreted as answers to the new bank. An explicit new-chain action switches to the new edition.
+- The original 12 questions are back, with the original four illustrated emoji choices in a two-column grid. Each player gets a shuffled question order; answers remain stored in canonical order for compatible scoring.
+- The opening page previews four characters. Tapping a result character triggers a gentle 24-second rotation. There is no “Run it back” option.
+- Each friend opens the newest link, plays, and shares a new link containing previous participants plus themselves. Sharing repeatedly does not duplicate the player. “Friend plays on this phone” advances the chain locally.
+- Two players receive the original pair match score. Three or more receive the original group energy, closest duo and unanimous preference picks. Everyone contributes; only the first eight characters appear.
+- Chains support 64 completed participants and a 16 KiB fragment. A full chain offers an explicit start-new-chain action. Names are rendered as text.
+- New links use the existing V2 format. Earlier V1/V2 links remain compatible. Links are snapshots: forward the newest link; separate branches do not merge or automatically update old links.
 - Answer choices use `touch-action: manipulation` to suppress double-tap zoom while retaining scrolling and pinch-to-zoom.
 
-## Versions and reproducibility
+## Saved question-bank groups
 
-New links use `#v=3&c=<base64url JSON>`. The envelope `[1, panel, participants]` pins candidate release 1 to `preferences/data-v1.js` and `preferences/engine-v1.js`. Keep these immutable when introducing a future bank or scoring release; add a new release decoder instead.
+The 80-question candidate edition is retired from the play flow. Its V3 links remain readable: players can view/share the saved group or explicitly start a classic quiz. Starting a classic quiz starts a separate chain; old preference answers are never reinterpreted as classic answers. Saved one-person snapshots and larger groups remain viewable.
 
-Each compact participant stores their name, avatar pool, 12 exact question/option identities in presentation order, separate 12-digit cosmetic choices, and option orientation. Question indices refer to the pinned 80-item array and stable item IDs/version 1; option IDs are a–d. Stored answers are validated against the complete session blueprint, and scores are recomputed from trusted weights. Unknown releases and malformed payloads are rejected as a whole.
-
-The 24-character response field uses two base64url-alphabet characters for each integer `questionIndex * 4 + optionIndex`. The enclosing JSON is UTF-8/base64url encoded. Worst-case 64-person Unicode-name fixtures remain below the fragment ceiling. No backend, account or analytics was added.
-
-The runtime retains the exact final form needed to reproduce a result. Declined-item history and selection seeds exist only during the active session and are not carried in links. This is an entertainment prototype, not a research data-collection implementation. See [candidate provenance](preferences/README.md) for source hashes, model limitations and engine changes.
+`preference-quiz.js` and the immutable `preferences/data-v1.js` / `preferences/engine-v1.js` remain for V3 compatibility. Release 1 pins `1.0.0-candidate-fun.1`, language revision 2. See [candidate provenance](preferences/README.md) and [question copy archive](preferences/copy-review.md). The bank was a candidate, not a validated psychometric assessment. No new questions have been added to the classic set.
 
 Focused checks (Node.js 24):
 
 ```bash
-PATH=/opt/homebrew/opt/node@24/bin:$PATH node --test tests/preference-engine.test.cjs tests/preference-quiz.test.cjs tests/preference-ui.test.cjs
+PATH=/opt/homebrew/opt/node@24/bin:$PATH node --test tests/group-ui.test.cjs tests/preference-ui.test.cjs tests/vibe-chain.test.cjs
 ```
 
-Legacy chain, renderer/flow and loader checks remain in `tests/vibe-chain.test.cjs`, `tests/group-ui.test.cjs` and `tests/avatar-loader.test.cjs`.
+Loader recovery and archived preference-engine/transport checks remain in the other files under `tests/`.
 
 ## Avatars
 
 `blender/make_avatars.py` builds 8 stylised teen bases (4 male, 4 female, each with its own hair, pose, outfit and body type) and 8 attribute accessories in Blender and exports `avatars.glb`. The cast uses expressive faces, sculpted hairstyles, casual streetwear and detailed sneakers, inspired by the supplied character reference.
 
-The legacy quiz selects the same base identities and recolors the `outfit`, `headphone` and `cape` materials from answers:
+The classic quiz selects the same base identities and recolors the `outfit`, `headphone` and `cape` materials from answers:
 
 | Attribute | Mesh | Triggered by |
 |---|---|---|
@@ -60,7 +51,7 @@ The legacy quiz selects the same base identities and recolors the `outfit`, `hea
 | leader | crown | yapper, infinite aura, or Social top |
 | chill | nightcap | Chill top axis or bed rotting |
 
-Base avatar is seeded from independent cosmetic choices for new quizzes (answers for legacy quizzes), drawn from the pool for the gender you picked (or all 8 for "surprise me"). Bases are assigned in arrival order, avoiding repeats within each gender pool until its options are exhausted. Adding friends preserves earlier assignments.
+Base avatar is seeded from classic quiz answers (independent cosmetic choices for saved V3 snapshots), drawn from the pool for the gender you picked (or all 8 for "surprise me"). Bases are assigned in arrival order, avoiding repeats within each gender pool until its options are exhausted. Adding friends preserves earlier assignments.
 
 Regenerate with Blender 5.2:
 
