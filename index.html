@@ -59,8 +59,8 @@ h1{font-size:clamp(56px,17vw,96px);line-height:.88;margin:0;font-weight:700;lett
 .count{font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
 .q{font-size:clamp(26px,7vw,34px);font-weight:700;line-height:1.1;margin:0 0 6px;letter-spacing:-.01em}
 .tag{font-size:14px;color:var(--c2);font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px}
-.opts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px}
-.opt{position:relative;aspect-ratio:1/.95;border-radius:var(--r);background:var(--card);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-size:19px;font-weight:600;backdrop-filter:blur(12px);transition:transform .18s cubic-bezier(.2,.9,.3,1.4),background .18s,border-color .18s;animation:popin .45s cubic-bezier(.2,.9,.3,1.3) both}
+.opts{touch-action:manipulation;display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px}
+.opt{touch-action:manipulation;position:relative;aspect-ratio:1/.95;border-radius:var(--r);background:var(--card);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-size:19px;font-weight:600;backdrop-filter:blur(12px);transition:transform .18s cubic-bezier(.2,.9,.3,1.4),background .18s,border-color .18s;animation:popin .45s cubic-bezier(.2,.9,.3,1.3) both}
 .opt:nth-child(2){animation-delay:.05s}.opt:nth-child(3){animation-delay:.1s}.opt:nth-child(4){animation-delay:.15s}
 @keyframes popin{from{opacity:0;transform:scale(.6) rotate(-4deg)}to{opacity:1;transform:none}}
 .opt em{font-style:normal;font-size:54px;line-height:1;filter:drop-shadow(0 6px 12px rgba(0,0,0,.35));transition:transform .18s}
@@ -117,6 +117,38 @@ h1{font-size:clamp(56px,17vw,96px);line-height:.88;margin:0;font-weight:700;lett
 canvas#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:5}
 .foot{margin-top:auto;padding-top:26px;font-size:12px;color:rgba(255,255,255,.35);text-align:center}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+[hidden]{display:none!important}
+#invite{max-width:100%;width:auto;overflow-wrap:anywhere}
+.notice{color:var(--c2);font-size:16px;overflow-wrap:anywhere}
+.cast-labels,.roster{padding:0;list-style:none;display:grid;gap:8px;text-align:left;overflow-wrap:anywhere}
+.cast-labels{grid-template-columns:repeat(calc(var(--cast-cols,2)*2),minmax(0,1fr));font-size:13px;margin:8px 0}
+.roster li{padding:10px 12px;border-radius:14px;background:var(--card)}
+.roster small{display:block;color:var(--muted);margin-top:3px}
+button:disabled{opacity:.45;cursor:default}
+#vsTitle,#duo,#closest{overflow-wrap:anywhere}
+.stage.group-stage{height:390px}.stage.group-stage.many{height:520px}
+@media(min-width:420px){.stage.group-stage{height:350px}.stage.group-stage.many{height:430px}}
+#app.group-view{max-width:1120px}
+.group-view #vs{order:0;margin-top:0}
+.group-view #card{order:1}
+.group-view #castInfo{order:2}
+.group-view #fullNotice,.group-view #newChain{order:3}
+.group-view .actions{order:4}
+.group-view #s-result>.foot{order:5}
+.group-view #s-result{gap:18px}
+#castLimit{color:var(--muted);font-size:14px;text-align:center}
+@media(min-width:900px){
+  .group-view #s-result.on{display:grid;grid-template-columns:minmax(0,2fr) minmax(260px,1fr);align-items:start;gap:22px}
+  .group-view #vs{grid-column:1;grid-row:1 / span 2;padding:26px 24px}
+  .group-view #card{grid-column:2;grid-row:1;padding:26px 20px}
+  .group-view .actions{grid-column:2;grid-row:2;margin-top:0}
+  .group-view #castInfo{grid-column:1 / -1}
+  .group-view #fullNotice,.group-view #newChain,.group-view #s-result>.foot{grid-column:1 / -1}
+  .group-view .stage.group-stage{height:410px}
+  .group-view .stage.group-stage.many{height:550px}
+  .group-view .roster{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .group-view #vsTitle{font-size:30px}
+}
 </style>
 </head>
 <body>
@@ -133,6 +165,7 @@ canvas#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-in
     <p class="sub">12 questions. 60 seconds. Find your vibe, then see if your friends actually match. No cap.</p>
     <input class="name" id="name" maxlength="14" placeholder="Your name or nickname (optional)" autocomplete="off">
     <div class="seg" id="gender"><button data-g="m">👦 He</button><button data-g="f">👧 She</button><button data-g="x" class="on">✨ Surprise me</button></div>
+    <p class="notice" id="linkNotice" hidden></p><button class="btn ghost" id="viewChain" hidden>View the full group</button><button class="btn ghost" id="newChainIntro" hidden>Start a new chain</button>
     <button class="btn primary pulse" id="start">Lock in 🔒</button>
   </div>
   <div class="foot">No account. No tracking. No cap. Your answers live only in the link you share.</div>
@@ -159,25 +192,28 @@ canvas#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-in
   <div class="vs" id="vs" hidden>
     <h3 id="vsTitle"></h3>
     <p class="duo" id="duo"></p>
-    <div class="ring">
+    <div class="ring" id="pairring">
       <svg viewBox="0 0 160 160"><defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#38e8ff"/><stop offset="1" stop-color="#ff4d8d"/></linearGradient></defs>
       <circle class="t" cx="80" cy="80" r="70"/><circle class="p" id="ringp" cx="80" cy="80" r="70"/></svg>
       <div class="n"><span id="pct">0</span><small>%</small></div>
     </div>
-    <div class="both" id="both"></div>
+    <div id="groupDetails" hidden><div class="stats" id="energy"></div><p id="closest"></p></div><div class="both" id="both"></div>
     <div class="chain" id="chain"></div>
   </div>
+  <div id="castInfo" hidden><ol class="cast-labels" id="castLabels" aria-label="Characters, left to right by row"></ol><p id="castLimit" hidden></p><h3>The whole crew · arrival order</h3><ol class="roster" id="roster"></ol></div>
+  <p class="notice" id="fullNotice" hidden>This chain is full at 64 people. You can still share the whole group.</p><button class="btn ghost" id="newChain" hidden>Start a new chain</button>
   <div class="actions">
     <button class="btn primary pulse" id="share">Send to a friend 📲</button>
     <button class="btn ghost" id="pass">Friend plays on this phone 📱</button>
     <button class="btn ghost" id="again">Run it back 🔁</button>
   </div>
-  <div class="foot">Send the link. Your friend plays, sees your match %, and passes it on. Aura farming, but wholesome.</div>
+  <div class="foot">Send the link. Every friend stays in the group as the next person joins. Aura farming, but wholesome.</div>
 </section>
 
 </div>
-<div class="toast" id="toast">Link copied. Go send it 📲</div>
+<div class="toast" id="toast">Whole group link copied 📲</div>
 
+<script src="vibe-chain.js?v=1"></script>
 <script>
 // axes: [chaos, chill, nerd, social]
 const Q=[
@@ -206,21 +242,29 @@ const $=s=>document.querySelector(s);
 const state={i:0,a:[],name:"",gender:"x"};
 $("#gender").onclick=e=>{const b=e.target.closest("button");if(!b)return;state.gender=b.dataset.g;[...$("#gender").children].forEach(c=>c.classList.toggle("on",c===b))};
 
-// ---- friend from URL ----
-function readHash(){
-  const p=new URLSearchParams(location.hash.slice(1));
-  const a=(p.get("a")||"").split("").map(Number);
-  if(a.length!==Q.length||a.some(x=>isNaN(x)||x<0||x>3))return null;
-  return {a,name:(p.get("n")||"").slice(0,14),hops:Math.min(999,+(p.get("h")||0)||0),g:/^[mf]$/.test(p.get("g"))?p.get("g"):"x"};
+// ---- group from URL ----
+const incomingLink=VibeChain.read(location.hash);
+let incomingMembers=incomingLink.members,viewingFull=false;
+function memberName(p,i){return p.name||`Player ${i+1}`}
+function completedGroup(){return viewingFull?incomingMembers.map(p=>({...p,a:p.a.slice()})):VibeChain.append(incomingMembers,{a:state.a,name:state.name,g:state.gender})}
+function applyGroup(){
+  const n=incomingMembers.length,full=n>=VibeChain.MAX_MEMBERS;
+  $("#invite").hidden=!n;
+  $("#invite").querySelector("span").textContent=n?`Join ${memberName(incomingMembers[0],0)}'s group · ${n} ${n===1?"person":"people"} so far`:"";
+  $("#start").disabled=full;$("#start").textContent=n?"Join the crew 🔥":"Lock in 🔒";
+  $("#linkNotice").hidden=!full&&!incomingLink.error;
+  $("#linkNotice").textContent=full?"This chain is full at 64 people. View the group or start a new chain.":incomingLink.error||"";
+  $("#viewChain").hidden=!full;$("#newChainIntro").hidden=!full;
+  document.title=n?memberName(incomingMembers[0],0)+" sent you a vibe check":"VIBECHECK";
 }
-let friend=readHash();
-function applyFriend(){
-  const el=$("#invite");el.hidden=false;
-  el.querySelector("span").textContent=(friend.name||"A friend")+" wants to see if you match";
-  $("#start").textContent="Accept the challenge 🔥";
-  document.title=(friend.name||"A friend")+" sent you a vibe check";
+function newChain(){
+  incomingMembers=[];viewingFull=false;incomingLink.error=null;
+  history.replaceState(null,"",location.pathname+location.search);state.a=[];state.name="";$("#name").value="";
+  applyGroup();show("#s-intro");
 }
-if(friend)applyFriend();
+$("#newChain").onclick=newChain;$("#newChainIntro").onclick=newChain;
+$("#viewChain").onclick=()=>{viewingFull=true;show("#s-result");$("#card").hidden=true;renderGroup(incomingMembers)};
+applyGroup();
 
 // floating emoji bg
 (function(){
@@ -231,11 +275,16 @@ if(friend)applyFriend();
 })();
 
 // ---- flow ----
-function show(id){document.querySelectorAll(".screen").forEach(s=>s.classList.remove("on"));$(id).classList.add("on");scrollTo(0,0)}
-$("#start").onclick=()=>{state.name=$("#name").value.trim();state.i=0;state.a=[];show("#s-quiz");renderQ()};
+function show(id){if(id!=="#s-result"){pairAnimation++;$("#app").classList.remove("group-view")}document.querySelectorAll(".screen").forEach(s=>s.classList.remove("on"));$(id).classList.add("on");scrollTo(0,0)}
+$("#start").onclick=()=>{if(incomingMembers.length>=VibeChain.MAX_MEMBERS)return;viewingFull=false;state.name=Array.from($("#name").value.trim()).slice(0,14).join("");state.i=0;state.a=[];show("#s-quiz");renderQ()};
 $("#again").onclick=()=>{state.i=0;state.a=[];show("#s-quiz");renderQ()};
-// pass the phone: current player becomes the "friend", player two takes the intro path
-$("#pass").onclick=()=>{friend={a:state.a.slice(),name:state.name,hops:friend?friend.hops+1:0,g:state.gender};applyFriend();$("#name").value="";$("#name").placeholder="Friend's name or nickname";$("#gender").lastElementChild.click();show("#s-intro");$("#name").focus()};
+// Advance the chain only when a new player takes the phone.
+function passPhone(){
+  const group=completedGroup();if(group.length>=VibeChain.MAX_MEMBERS)return;
+  incomingMembers=group;state.a=[];state.name="";viewingFull=false;applyGroup();
+  $("#name").value="";$("#name").placeholder="Friend's name or nickname";$("#gender").lastElementChild.click();show("#s-intro");$("#name").focus();
+}
+$("#pass").onclick=passPhone;
 
 function renderQ(){
   const q=Q[state.i];
@@ -274,7 +323,7 @@ function duo(p){return p>=80?"Twin flames 🔥 no cap":p>=60?"Certified duo 🤝
 
 function finish(){
   const {v,tr,arche}=score(state.a);
-  show("#s-result");
+  show("#s-result");$("#card").hidden=false;
   $("#arche").textContent=arche.n+" "+arche.e;$("#desc").textContent=arche.d;
   $("#youlabel").textContent=(state.name?state.name+", it's":"It's")+" giving";
   const mx=Math.max(1,...v);
@@ -282,29 +331,63 @@ function finish(){
   const TR=Q.filter(q=>q.a!==undefined).length;$("#trivia").innerHTML=`Trivia: <b>${tr}/${TR}</b> ${tr===TR?"— giga brain, no cap 🧠":tr===TR-1?"— mid-high, respectable 📈":tr>0?"— lowkey cooked 💀":"— vibes over facts 💅"}`;
   requestAnimationFrame(()=>requestAnimationFrame(()=>document.querySelectorAll("#stats i").forEach(i=>i.style.width=i.dataset.w+"%")));
   confetti();
-  const vs=$("#vs"),stage=$(".stage");
-  if(friend){
-    vs.hidden=false;vs.prepend(stage);
-    const p=match(state.a,friend.a);const fn=friend.name||"your friend";const fs=score(friend.a);
-    $("#vsTitle").textContent=`${state.name||"You"} × ${fn}`;
-    $("#duo").textContent=`${duo(p)} · ${fn} is ${fs.arche.n} ${fs.arche.e}`;
-    $("#both").innerHTML=state.a.map((k,i)=>k===friend.a[i]?`<span style="animation-delay:${i*.08+1}s">${Q[i].o[k][0]} ${Q[i].o[k][1]}</span>`:"").join("")||`<span>You agreed on literally nothing 💀 cooked</span>`;
-    $("#chain").innerHTML=friend.hops>0?`🔗 This vibe check has hopped through <b>${friend.hops+1} friends</b> so far. Keep the aura going.`:`🔗 You're the first hop. Start the chain, farm the aura.`;
-    setTimeout(()=>{$("#ringp").style.strokeDashoffset=440-440*p/100;countUp($("#pct"),p,1600)},350);
-    $("#share").textContent="Send it to another friend 📲";
-    buildVibe([{v,a:state.a,g:state.gender},{v:fs.v,a:friend.a,g:friend.g}]);
-  } else {vs.hidden=true;$("#card").prepend(stage);buildVibe([{v,a:state.a,g:state.gender}])}
+  renderGroup(completedGroup());
 }
-function countUp(el,to,ms){setTimeout(()=>el.textContent=to,ms+80);const t0=performance.now();(function f(t){const k=Math.min(1,(t-t0)/ms);el.textContent=Math.round(to*(1-Math.pow(1-k,3)));if(k<1)requestAnimationFrame(f)})(t0)}
+let pairAnimation=0,castMembers=[];
+function renderGroup(group){
+  const token=++pairAnimation,n=group.length,vs=$("#vs"),stage=$(".stage"),pair=n===2;
+  $("#app").classList.toggle("group-view",n>=3);
+  $("#pairring").hidden=!pair;$("#groupDetails").hidden=n<3;
+  $("#ringp").style.strokeDashoffset=440;$("#pct").textContent="0";
+  $("#both").replaceChildren();$("#energy").replaceChildren();$("#closest").textContent="";
+  vs.hidden=n<2; if(n>1)vs.prepend(stage);else $("#card").prepend(stage);
+  $("#castInfo").hidden=n<2;$("#castLabels").hidden=n<2;
+  if(n>=3)stage.after($("#castLabels"));else $("#castInfo").prepend($("#castLabels"));
+  $("#fullNotice").hidden=n<VibeChain.MAX_MEMBERS;$("#newChain").hidden=n<VibeChain.MAX_MEMBERS;
+  $("#pass").disabled=n>=VibeChain.MAX_MEMBERS;$("#again").hidden=viewingFull;
+  $("#share").textContent=n>1?"Share the whole group 📲":"Send to a friend 📲";
+  let shared=[];
+  if(pair){
+    const p=match(group[0].a,group[1].a);
+    $("#vsTitle").textContent=group.map(memberName).join(" × ");$("#duo").textContent=duo(p);
+    shared=Q.flatMap((q,i)=>group[0].a[i]===group[1].a[i]?[i]:[]);
+    setTimeout(()=>{if(token!==pairAnimation)return;$("#ringp").style.strokeDashoffset=440-440*p/100;countUp($("#pct"),p,1600,token)},350);
+  }else if(n>=3){
+    const d=VibeChain.dynamics(group,Q,score,match);shared=d.shared;
+    $("#vsTitle").textContent="Group dynamics";$("#duo").textContent=`${n} people · ${AXN[d.leadAxis]} leads the crew`;
+    $("#energy").innerHTML=AXN.map((name,i)=>`<div class="st"><span>${name}</span><div class="bar"><i style="width:${d.energy[i]}%"></i></div><small>${d.energy[i]}%</small></div>`).join("");
+    $("#closest").textContent=`Closest duo: ${memberName(group[d.closest.left],d.closest.left)} × ${memberName(group[d.closest.right],d.closest.right)} · ${d.closest.percent}%`;
+  }
+  shared.forEach(i=>{const chip=document.createElement("span");chip.textContent=Q[i].o[group[0].a[i]][0]+" "+Q[i].o[group[0].a[i]][1];$("#both").appendChild(chip)});
+  if(!shared.length){const chip=document.createElement("span");chip.textContent=n>=3?"No unanimous picks yet. Different tastes, one crew ✨":"Different picks, plenty of personality ✨";$("#both").appendChild(chip)}
+  $("#chain").textContent=`🔗 ${n} ${n===1?"person":"people"} in this chain. Share the newest link to bring everyone along.`;
+  $("#roster").replaceChildren();group.forEach((p,i)=>{const li=document.createElement("li"),small=document.createElement("small");li.textContent=`${i+1}. ${memberName(p,i)}`;small.textContent=score(p.a).arche.n;li.appendChild(small);$("#roster").appendChild(li)});
+  castMembers=group;renderCast();
+}
+function countUp(el,to,ms,token){const t0=performance.now();(function f(t){if(token!==pairAnimation)return;const k=Math.min(1,(t-t0)/ms);el.textContent=Math.round(to*(1-Math.pow(1-k,3)));if(k<1)requestAnimationFrame(f)})(t0)}
+function castColumns(count,width){return count<=2?count:count<=4?(width>=560?count:2):Math.ceil(count/2)}
+function layoutCastLabels(count,cols){
+  $("#castLabels").style.setProperty("--cast-cols",cols);
+  [...$("#castLabels").children].forEach((li,i)=>{const row=Math.floor(i/cols),rowCount=Math.min(cols,count-row*cols);li.style.gridColumn=`${cols-rowCount+(i%cols)*2+1} / span 2`;li.style.gridRow=row+1});
+}
+function renderCast(){
+  const visible=castMembers.slice(0,8);
+  $("#castLimit").hidden=castMembers.length<=8;
+  $("#castLimit").textContent=`First 8 vibes shown · All ${castMembers.length} people shape the dynamics.`;
+  $("#castLabels").style.setProperty("--cast-cols",castColumns(visible.length,$("#vibe").clientWidth||400));$("#castLabels").replaceChildren();
+  visible.forEach((p,i)=>{const li=document.createElement("li");li.textContent=`${i+1}. ${memberName(p,i)}`;$("#castLabels").appendChild(li)});
+  layoutCastLabels(visible.length,castColumns(visible.length,$("#vibe").clientWidth||400));
+  const indices=assignBases(castMembers);
+  buildVibe(visible.map((p,i)=>({...p,v:score(p.a).v,idx:indices[i]})));
+}
 
 // ---- share ----
 function shareLink(){
-  const p=new URLSearchParams({a:state.a.join(""),n:state.name,h:friend?friend.hops+1:0,g:state.gender});
-  return location.origin+location.pathname+"#"+p.toString();
+  return location.origin+location.pathname+VibeChain.write(completedGroup());
 }
 $("#share").onclick=async()=>{
-  const url=shareLink(),arche=score(state.a).arche;
-  const text=`I'm a ${arche.n} ${arche.e} — take the vibe check and see if we match, no cap 👀`;
+  let url;try{url=shareLink()}catch(e){$("#fullNotice").hidden=false;$("#fullNotice").textContent=e.message;return}
+  const text="Join our vibe check — this link keeps the whole group 👀";
   try{
     if(navigator.share)await navigator.share({title:"VIBECHECK",text,url});
     else{await navigator.clipboard.writeText(url);toast()}
@@ -325,40 +408,82 @@ addEventListener("pointerleave",()=>card.style.transform="");
 function seed(str){let h=1779033703^str.length;for(const c of str)h=Math.imul(h^c.charCodeAt(0),3432918353),h=h<<13|h>>>19;return()=>{h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return((h^=h>>>16)>>>0)/4294967296}}
 const AVATARS=["avatar_m1","avatar_m2","avatar_m3","avatar_m4","avatar_f1","avatar_f2","avatar_f3","avatar_f4"];
 const GLB_BASE_URL="avatars.glb?v=teen-fast1";
-let glbPromise=null,retryCount=0,lastPersonas=null;
+let glbPromise=null,retryCount=0,lastPersonas=null,loadId=0;
 
 function loadGLB(){
   if(glbPromise)return glbPromise;
   if(!window.THREE||!THREE.GLTFLoader)return Promise.reject(new Error("no loader"));
-  const url=retryCount>0?`${GLB_BASE_URL}&r=${retryCount}`:GLB_BASE_URL;
-  const loader=new THREE.GLTFLoader();
-  if(window.MeshoptDecoder)loader.setMeshoptDecoder(MeshoptDecoder);
-  glbPromise=new Promise((resolve,reject)=>{
-    loader.load(url,
-      g=>resolve(g.scene),
-      xhr=>{
-        const st=$("#vibeStatus");
-        if(st){
-          if(xhr.lengthComputable&&xhr.total>0){
-            const pct=Math.min(99,Math.round((xhr.loaded/xhr.total)*100));
-            st.textContent=`summoning your 3D vibe... ${pct}%`;
-          }else if(xhr.loaded>0){
-            const mb=(xhr.loaded/(1024*1024)).toFixed(1);
-            st.textContent=`summoning your 3D vibe... (${mb}MB)`;
-          }
-        }
-      },
-      err=>{
-        glbPromise=null;
-        reject(err);
-      }
-    );
+  if(!window.MeshoptDecoder)return Promise.reject(new Error("no mesh decoder"));
+  const id=++loadId;
+  const status=text=>{const st=$("#vibeStatus");if(id===loadId&&st)st.textContent=text};
+  const download=url=>new Promise((resolve,reject)=>{
+    const xhr=new XMLHttpRequest();
+    let ended=false,idle,overall;
+    const finish=(error,buffer)=>{
+      if(ended)return;ended=true;
+      clearTimeout(idle);clearTimeout(overall);
+      xhr.onload=xhr.onerror=xhr.onabort=xhr.ontimeout=xhr.onprogress=null;
+      if(error){xhr.abort();reject(error)}else resolve(buffer);
+    };
+    const resetIdle=()=>{clearTimeout(idle);idle=setTimeout(()=>finish(new Error("download stalled")),10000)};
+    let loaded=0;
+    xhr.onprogress=e=>{
+      if(ended)return;
+      if(e.loaded>loaded){loaded=e.loaded;resetIdle()}
+      if(e.lengthComputable&&e.total>0)status(`Downloading your 3D vibe… ${Math.min(99,Math.round(e.loaded/e.total*100))}%`);
+      else if(e.loaded>0)status(`Downloading your 3D vibe… (${(e.loaded/(1024*1024)).toFixed(1)}MB)`);
+    };
+    xhr.onload=()=>{
+      if(ended)return;
+      const buffer=xhr.response;
+      if(xhr.status<200||xhr.status>=300)return finish(new Error(`avatar HTTP ${xhr.status}`));
+      if(!(buffer instanceof ArrayBuffer)||buffer.byteLength<12)return finish(new Error("invalid avatar body"));
+      const header=new DataView(buffer);
+      if(header.getUint32(0,true)!==0x46546c67||header.getUint32(4,true)!==2||header.getUint32(8,true)!==buffer.byteLength)return finish(new Error("invalid or incomplete avatar body"));
+      finish(null,buffer);
+    };
+    xhr.onerror=()=>finish(new Error("avatar network error"));
+    xhr.onabort=()=>finish(new Error("avatar download aborted"));
+    xhr.ontimeout=()=>finish(new Error("avatar download timed out"));
+    try{
+      xhr.open("GET",url,true);xhr.responseType="arraybuffer";
+      status("Downloading your 3D vibe…");resetIdle();
+      overall=setTimeout(()=>finish(new Error("avatar download timed out")),30000);
+      xhr.send();
+    }catch(error){finish(error)}
   });
-  return glbPromise;
+  const parse=buffer=>new Promise((resolve,reject)=>{
+    let ended=false;
+    const finish=(error,g)=>{
+      if(ended)return;ended=true;clearTimeout(timer);
+      if(error)reject(error);else if(!g||!g.scene)reject(new Error("avatar scene missing"));else resolve(g.scene);
+    };
+    const timer=setTimeout(()=>finish(new Error("avatar preparation timed out")),15000);
+    status("Preparing your 3D vibe…");
+    try{
+      const loader=new THREE.GLTFLoader();loader.setMeshoptDecoder(MeshoptDecoder);
+      loader.parse(buffer,"",g=>finish(null,g),error=>finish(error||new Error("avatar decode failed")));
+    }catch(error){finish(error)}
+  });
+  const promise=(async()=>{
+    let buffer;
+    try{buffer=await download(retryCount?`${GLB_BASE_URL}&r=${Date.now()}-${++retryCount}`:GLB_BASE_URL)}
+    catch(error){buffer=await download(`${GLB_BASE_URL}&r=${Date.now()}-${++retryCount}`)}
+    return parse(buffer);
+  })();
+  glbPromise=promise;
+  promise.catch(()=>{if(glbPromise===promise)glbPromise=null});
+  return promise;
 }
 loadGLB().catch(e=>console.warn("Initial avatar preload failed",e));
 const pool=g=>g==="m"?[0,1,2,3]:g==="f"?[4,5,6,7]:[0,1,2,3,4,5,6,7];
 const baseIdx=(a,g)=>{const P=pool(g);return P[Math.floor(seed(a.join(""))()*P.length)]};
+function assignBases(members){
+  const used=new Map();return members.map(p=>{const P=pool(p.g),first=baseIdx(p.a,p.g),offset=P.indexOf(first);
+    const order=Array.from({length:P.length},(_,i)=>P[(offset+i)%P.length]),least=Math.min(...P.map(i=>used.get(i)||0));
+    const idx=order.find(i=>(used.get(i)||0)===least);used.set(idx,(used.get(idx)||0)+1);return idx;
+  });
+}
 // which attributes you wear, straight from your answers. v=[chaos,chill,brain,social]
 function attrs(v,a){
   const top=v.indexOf(Math.max(...v)),tr=a.filter((k,i)=>Q[i].a===k).length;
@@ -374,9 +499,9 @@ function attrs(v,a){
     crazy:top===0||a[4]===1,                                       // horns
   };
 }
-function makeCreature(scene,lib,v,a,idx,x,sc){
+function makeCreature(scene,lib,v,a,idx,x,sc,y=0){
   const at=attrs(v,a),rnd=seed(a.join(""));
-  const root=new THREE.Group();root.position.set(x,0,0);root.scale.setScalar(sc);scene.add(root);
+  const root=new THREE.Group();root.position.set(x,y,0);root.scale.setScalar(sc);scene.add(root);
   const G=new THREE.Group();root.add(G);
   const add=(name,tint)=>{const src=lib.getObjectByName(name);if(!src)return;const m=src.clone();
     m.traverse(o=>{if(o.isMesh){o.material=o.material.clone();if(tint&&tint[o.material.name])o.material.color.set("#"+tint[o.material.name])}});G.add(m)};
@@ -386,7 +511,7 @@ function makeCreature(scene,lib,v,a,idx,x,sc){
   if(at.sense)add("acc_sense");else if(at.smart)add("acc_smart");
   if(at.hat)add("acc_"+at.hat);
   if(at.crazy)add("acc_crazy");
-  return {G,face:x?-Math.sign(x)*.4:0,phase:rnd()*6,bob:.05+rnd()*.07,idx,at};
+  return {root,G,face:x?-Math.sign(x)*.4:0,phase:rnd()*6,bob:.05+rnd()*.07,idx,at};
 }
 let R,V=null,buildId=0;
 function showRetry(err){
@@ -396,6 +521,11 @@ function showRetry(err){
   ldr.innerHTML=`<button class="retry-btn" id="retryBtn" type="button">⚠️ Failed to load &bull; Tap to retry 🔄</button>`;
   const btn=$("#retryBtn");
   if(btn){
+    const message=err&&err.message||"";
+    const label=/download.*(?:stall|timed out)/i.test(message)?"Connection stalled":
+      /HTTP|invalid.*body|incomplete.*body/i.test(message)?"Server couldn’t send your vibe":
+      /preparation|prepare|decode|scene missing/i.test(message)?"Couldn’t prepare your vibe":"Failed to load";
+    btn.textContent=`⚠️ ${label} • Tap to retry 🔄`;
     btn.onclick=(e)=>{
       e.stopPropagation();
       retryCount++;
@@ -405,32 +535,42 @@ function showRetry(err){
     };
   }
 }
-// personas: [{v,a,arche}] — one avatar centred, or two side by side facing each other (always different bases)
+// personas: at most eight arrival-ordered members with stable full-group base indices.
 function buildVibe(personas){
-  if(!window.THREE)return;const id=++buildId;
+  const id=++buildId;
+  const stage=$(".stage");stage.classList.toggle("group-stage",personas.length>2);stage.classList.toggle("many",personas.length>4);
   if(personas)lastPersonas=personas;
   const ldr=$("#vibeLoader");
-  if(ldr&&!V)ldr.classList.remove("done");
+  if(ldr){
+    ldr.classList.remove("done");
+    if(!$("#vibeStatus"))ldr.innerHTML=`<div class="spin"></div><span id="vibeStatus">Loading your 3D vibe…</span>`;
+  }
   loadGLB().then(lib=>{
     if(id!==buildId)return;
-    if(ldr)ldr.classList.add("done");
     const cv=$("#vibe");const W=cv.clientWidth||400,H=cv.clientHeight||290;
-    if(!R){R=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:true});R.setPixelRatio(Math.min(2,devicePixelRatio));R.outputEncoding=THREE.sRGBEncoding;cv.addEventListener("pointerdown",()=>{if(V)V.spin=10})}
+    if(!R){R=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:true});R.setPixelRatio(Math.min(2,devicePixelRatio));R.outputEncoding=THREE.sRGBEncoding;cv.addEventListener("pointerdown",()=>{if(V&&!matchMedia("(prefers-reduced-motion: reduce)").matches)V.spin=Math.PI*2})}
     R.setSize(W,H,false);
-    const two=personas.length>1;
     const scene=new THREE.Scene(),cam=new THREE.PerspectiveCamera(34,W/H,.1,50);cam.position.set(0,0,6);
     scene.add(new THREE.HemisphereLight(0xffffff,0xffd6e0,1));
     const key=new THREE.DirectionalLight(0xfff1e0,1.1);key.position.set(2,5,5);scene.add(key);
     const fill=new THREE.DirectionalLight(0xdfe9ff,.5);fill.position.set(-4,2,4);scene.add(fill);
     const rim=new THREE.PointLight(0xff4d8d,.6,20);rim.position.set(4,-2,-3);scene.add(rim);
-    const idx=personas.map(p=>baseIdx(p.a,p.g));
-    if(two&&idx[0]===idx[1]){const P=pool(personas[1].g);idx[1]=P[(P.indexOf(idx[1])+1)%P.length]}
-    const cs=personas.map((p,i)=>makeCreature(scene,lib,p.v,p.a,idx[i],two?(i?.8:-.8):0,1));
+    const cs=personas.map(p=>makeCreature(scene,lib,p.v,p.a,p.idx??baseIdx(p.a,p.g),0,1));
+    const layout=()=>{
+      const cols=castColumns(cs.length,cv.clientWidth||400),rows=Math.ceil(cs.length/cols);
+      layoutCastLabels(cs.length,cols);
+      cs.forEach((c,i)=>{const row=Math.floor(i/cols),rowCount=Math.min(cols,cs.length-row*cols),x=(i%cols-(rowCount-1)/2)*1.65;
+        c.root.position.set(x,((rows-1)/2-row)*2.65,0);c.face=cs.length===2?-Math.sign(x)*.4:0;
+      });
+    };layout();
+    if(V)V.scene.traverse(o=>{if(o.isMesh){const materials=Array.isArray(o.material)?o.material:[o.material];materials.forEach(m=>m.dispose())}});
     const fit=()=>{const box=new THREE.Box3().setFromObject(scene),c=box.getCenter(new THREE.Vector3()),sz=box.getSize(new THREE.Vector3()),f=Math.tan(cam.fov/2*Math.PI/180);
       cam.aspect=cv.clientWidth/cv.clientHeight;cam.updateProjectionMatrix();const d=Math.max(sz.y/(2*f),sz.x/(2*f*cam.aspect))*1.06+sz.z/2;cam.position.set(c.x,c.y,c.z+d);cam.lookAt(c)};fit();
-    V={scene,cam,cs,fit,spin:0,t0:performance.now(),raf:V&&V.raf};
+    V={scene,cam,cs,fit,layout,spin:0,spinAngle:0,lastFrame:performance.now(),t0:performance.now(),raf:V&&V.raf};
     if(!V.raf)loop();
+    if(ldr)ldr.classList.add("done");
   }).catch(e=>{
+    if(id!==buildId)return;
     console.warn("avatar load failed",e);
     showRetry(e);
   });
@@ -438,13 +578,15 @@ function buildVibe(personas){
 function loop(){
   if(!V||!$("#s-result").classList.contains("on")){if(V)V.raf=0;return}
   V.raf=requestAnimationFrame(loop);
-  const t=(performance.now()-V.t0)/1000;V.spin*=.94;
+  const now=performance.now(),t=(now-V.t0)/1000,dt=Math.min(.1,(now-V.lastFrame)/1000);V.lastFrame=now;
+  // One gentle 24-second turn; repeated taps never increase its speed.
+  const step=Math.min(V.spin,dt*Math.PI/12);V.spin-=step;V.spinAngle=(V.spinAngle+step)%(Math.PI*2);
   V.cs.forEach(c=>{const tt=t+c.phase;
-    c.G.rotation.y=c.face+Math.sin(tt*.6)*.25+px*.5+(V.spin>.05?V.spin*t*.3:0);c.G.rotation.x=py*.15;c.G.rotation.z=Math.sin(tt*2.2)*.03;
+    c.G.rotation.y=c.face+Math.sin(tt*.6)*.25+px*.5+V.spinAngle;c.G.rotation.x=py*.15;c.G.rotation.z=Math.sin(tt*2.2)*.03;
     const b=Math.abs(Math.sin(tt*2.2));c.G.position.y=b*c.bob*.4;c.G.scale.set(1-.01*b,1+.02*b,1-.01*b)});
   R.render(V.scene,V.cam);
 }
-addEventListener("resize",()=>{if(!V)return;const cv=$("#vibe");R.setSize(cv.clientWidth,cv.clientHeight,false);V.fit()});
+addEventListener("resize",()=>{if(!V)return;const cv=$("#vibe");R.setSize(cv.clientWidth,cv.clientHeight,false);V.layout();V.fit()});
 
 // ---- confetti ---- ponytail: tiny canvas burst, no lib
 function confetti(){

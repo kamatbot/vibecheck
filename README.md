@@ -1,6 +1,6 @@
 # VIBECHECK
 
-60-second vibe quiz for 10–18 year olds. Find your vibe, get a 3D Vibe avatar built from your answers, then send the link: your friend plays and sees your match %. No backend, no accounts. Your answers live only in the link you share.
+60-second vibe quiz for 10–18 year olds. Find your vibe, get a 3D Vibe avatar built from your answers, then send the link: each friend plays and joins the chain. Two people see their match %; three or more see group dynamics. No backend, no accounts. Your answers live only in the link you share.
 
 ## Run
 
@@ -14,9 +14,21 @@ Open http://localhost:8791.
 
 ## How the viral loop works
 
-- Share link = `#a=<12 answers>&n=<name>&h=<hop count>&g=<m/f/x>`.
-- A friend opening it sees "Maya wants to see if you match", plays, and gets a match ring, shared picks, and both Vibe avatars side by side.
-- "Friend plays on this phone" does the same hand-off on one device.
+- New share links use `#v=2&c=<base64url payload>`. The payload carries every completed participant's 12 answers, nickname and avatar pool in arrival order. It stays in the URL fragment; no backend or account is required.
+- Each friend opens the newest link, plays, and shares a new link containing the previous people plus themselves. Sharing again or replaying does not add duplicate entries. “Friend plays on this phone” advances the same chain locally.
+- Two participants see the existing pair match score and shared picks. Three or more see group energy, the closest duo, unanimous preference picks, a full roster, and the accumulated characters.
+- Group energy averages each participant's normalized four-axis profile and rounds to percentages totaling 100. Closest duo uses the existing pair-match formula; ties keep the first pair in arrival order. Unanimous picks exclude trivia questions.
+- The 3D cast keeps the first eight participants visible. Later participants still join the roster and update all group dynamics; there is no character paging. Desktop groups use a wider cast layout.
+- A chain supports 64 people and a 16 KiB fragment. A full chain has an explicit start-new-chain action; previous participants are never silently discarded.
+- Links are snapshots: forward the newest link to bring everyone along. Separate branches do not automatically merge or update older links.
+- Old `#a=<12 answers>&n=<name>&h=<hop count>&g=<m/f/x>` links still work. They carry only one previous person's answers, so their old hop count cannot restore missing participants.
+- Answer choices use `touch-action: manipulation` to suppress double-tap zoom while retaining scrolling and pinch-to-zoom.
+
+Focused checks (Node.js 24):
+
+```bash
+PATH=/opt/homebrew/opt/node@24/bin:$PATH node --test tests/vibe-chain.test.cjs tests/group-ui.test.cjs tests/avatar-loader.test.cjs
+```
 
 ## Avatars
 
@@ -35,7 +47,7 @@ The quiz still selects the same base identities and recolors the `outfit`, `head
 | leader | crown | yapper, infinite aura, or Social top |
 | chill | nightcap | Chill top axis or bed rotting |
 
-Base avatar is seeded from your answers, drawn from the pool for the gender you picked (or all 8 for "surprise me"). In a match the two players always get different bases.
+Base avatar is seeded from your answers, drawn from the pool for the gender you picked (or all 8 for "surprise me"). Bases are assigned in arrival order, avoiding repeats within each gender pool until its options are exhausted. Adding friends preserves earlier assignments.
 
 Regenerate with Blender 5.2:
 
@@ -50,4 +62,4 @@ Review outputs:
 - `blender/faces.png`: face close-ups.
 - `blender/accessories.png`: accessory fit sheet.
 
-The GLB is approximately 8.5 MB. When regenerating it, update both `avatars.glb?v=...` URLs in `index.html` together to invalidate browser caches.
+The current Meshopt-compressed GLB is approximately 1.25 MB. Blender regeneration produces the larger source export; retain the decoder-compatible optimization step before publishing. Update `GLB_BASE_URL` in `index.html` when replacing the asset to invalidate browser caches. The current palette optimization merged the named tint materials, so answer-based material recoloring needs a separate asset correction.
