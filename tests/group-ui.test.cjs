@@ -9,7 +9,7 @@ function harness(){
  return {ctx,$,run:s=>vm.runInContext(s,ctx)};
 }
 const p={a:Array(12).fill(0),name:'<b>hi</b>',g:'x'};
-test('repeat sharing and replay never mutate incoming; phone pass adds once',()=>{
+test('repeat sharing never mutates incoming; phone pass adds once',()=>{
  const h=harness();h.ctx.p=p;h.run('incomingMembers=[p];state.a=p.a.slice();state.name="Next"');
  const first=h.run('shareLink()');assert.equal(h.run('shareLink()'),first);assert.equal(h.run('incomingMembers.length'),1);
  h.run('state.a=Array(12).fill(1)');assert.equal(h.run('completedGroup().length'),2);
@@ -31,3 +31,29 @@ test('full chain retains every member and only explicit new chain clears history
  const h=harness();h.ctx.p=p;h.run('incomingMembers=Array(64).fill(p);viewingFull=true;renderGroup(incomingMembers)');assert.equal(h.$('#pass').disabled,true);assert.equal(h.$('#fullNotice').hidden,false);assert.equal(h.$('#roster').children.length,64);assert.equal(VibeChain.read(h.run('shareLink()').split('https://example.test/')[1]).members.length,64);h.run('passPhone()');assert.equal(h.run('incomingMembers.length'),64);h.run('newChain()');assert.equal(h.run('incomingMembers.length'),0);
 });
 test('answers suppress double tap zoom without disabling pinch or native scroll',()=>{assert.match(html,/\.opts\{touch-action:manipulation/);assert.match(html,/\.opt\{touch-action:manipulation/);assert.doesNotMatch(html,/user-scalable\s*=\s*no|maximum-scale\s*=\s*1|preventDefault\(/)});
+
+test('Fisher-Yates produces complete independent question permutations',()=>{
+ const h=harness();h.runSource=source=>vm.runInContext(source,h.ctx);h.runSource(part('function shuffledQuestions(', '// Advance the chain'));
+ const left=Array.from(h.run('shuffledQuestions(()=>0)')),right=Array.from(h.run('shuffledQuestions(()=>.999)'));
+ assert.notDeepEqual(left,right);for(const order of [left,right])assert.deepEqual([...order].sort((a,b)=>a-b),Array.from({length:12},(_,i)=>i));
+});
+test('shuffled clicks reconstruct canonical answers, scores and links; each start reshuffles',()=>{
+ const h=harness(),timers=[];h.ctx.setTimeout=fn=>timers.push(fn);h.ctx.navigator={};h.ctx.finish=()=>{};
+ vm.runInContext(part('function shuffledQuestions(', '// Advance the chain')+part('function renderQ(){','// ---- scoring ----'),h.ctx);
+ h.run('Math.random=()=>0;startQuiz()');const first=Array.from(h.run('state.order'));
+ const canonical=Array.from({length:12},(_,i)=>i%4);h.ctx.canonical=canonical;
+ for(let i=0;i<12;i++){
+   const index=h.run('state.order[state.i]');assert.equal(h.$('#qtext').textContent,h.run(`Q[${index}].q`));
+   const button={classList:{add(){}},parentNode:{children:[]}};h.ctx.button=button;
+   h.run(`pick(${canonical[index]},button)`);while(timers.length)timers.shift()();
+ }
+ assert.deepEqual(Array.from(h.run('state.a')),canonical);assert.equal(JSON.stringify(h.run('score(state.a)')),JSON.stringify(h.run('score(canonical)')));
+ assert.deepEqual(VibeChain.read(h.run('shareLink()').split('https://example.test/')[1]).members[0].a,canonical);
+ h.run('passPhone();Math.random=()=>.999;startQuiz()');assert.notDeepEqual(Array.from(h.run('state.order')),first);assert.equal(h.run('incomingMembers.length'),1);
+});
+test('intro reuses one canvas with four preview identities and lifecycle guards',()=>{
+ const h=harness();vm.runInContext(part('function showIntroPreview(){','function buildVibe(personas){'),h.ctx);h.run('showIntroPreview()');assert.deepEqual(Array.from(h.ctx.built,p=>p.idx),[0,2,5,7]);assert.equal(h.$('#introPreview').children.length,1);
+ assert.equal((html.match(/id="vibe"/g)||[]).length,1);assert.equal((html.match(/new THREE.WebGLRenderer/g)||[]).length,1);assert.doesNotMatch(html,/id="again"|#again|Run it back/);
+ assert.match(html,/if\(id==="#s-intro"\)showIntroPreview\(\);else if\(id==="#s-quiz"\)buildId\+\+/);
+ assert.match(html,/if\(id!==buildId\)return/);assert.match(html,/if\(!V\|\|!avatarScreenVisible\(\)\)/);assert.match(html,/showIntroPreview\(\);\s*<\/script>/);
+});

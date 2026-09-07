@@ -12,10 +12,12 @@ python3 -m http.server 8791
 
 Open http://localhost:8791.
 
+The opening page previews four characters. Each player gets all 12 questions in a fresh shuffled order; stored answers retain canonical question order for compatible scoring and shared links.
+
 ## How the viral loop works
 
 - New share links use `#v=2&c=<base64url payload>`. The payload carries every completed participant's 12 answers, nickname and avatar pool in arrival order. It stays in the URL fragment; no backend or account is required.
-- Each friend opens the newest link, plays, and shares a new link containing the previous people plus themselves. Sharing again or replaying does not add duplicate entries. “Friend plays on this phone” advances the same chain locally.
+- Each friend opens the newest link, plays, and shares a new link containing the previous people plus themselves. Sharing again does not add duplicate entries. “Friend plays on this phone” advances the same chain locally.
 - Two participants see the existing pair match score and shared picks. Three or more see group energy, the closest duo, unanimous preference picks, a full roster, and the accumulated characters.
 - Group energy averages each participant's normalized four-axis profile and rounds to percentages totaling 100. Closest duo uses the existing pair-match formula; ties keep the first pair in arrival order. Unanimous picks exclude trivia questions.
 - The 3D cast keeps the first eight participants visible. Later participants still join the roster and update all group dynamics; there is no character paging. Desktop groups use a wider cast layout.
