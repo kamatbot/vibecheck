@@ -139,6 +139,17 @@ button:disabled{opacity:.45;cursor:default}
 #introPreview>p{font-size:13px;color:var(--muted);text-align:center;margin:0}
 #introPreview .stage{height:280px;margin:0}
 #introPreview .hint{bottom:0}
+.opts.preference-options{grid-template-columns:1fr;gap:10px}
+.preference-options .opt{aspect-ratio:auto;min-height:68px;padding:16px 20px;text-align:left;align-items:flex-start;font-size:18px;line-height:1.3}
+#swapQuestion{margin-top:18px}
+.snapshot-axis{padding:12px 0;border-bottom:1px solid var(--line);text-align:left;overflow-wrap:anywhere}
+.snapshot-axis:last-child{border-bottom:0}
+.snapshot-axis strong{display:block;font-size:17px}
+.snapshot-axis p{margin:6px 0 0;color:var(--muted);font-size:15px;line-height:1.4}
+.band-poles{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--muted);margin-top:8px}
+.band-track{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:8px}
+.band-track span{padding:7px 3px;border-radius:8px;background:var(--card);text-align:center;font-size:13px}
+.band-track span.selected{background:linear-gradient(135deg,var(--c4),var(--c1));color:#fff}
 #castLimit{color:var(--muted);font-size:14px;text-align:center}
 @media(min-width:900px){
   .group-view #s-result.on{display:grid;grid-template-columns:minmax(0,2fr) minmax(260px,1fr);align-items:start;gap:22px}
@@ -170,6 +181,7 @@ button:disabled{opacity:.45;cursor:default}
     <input class="name" id="name" maxlength="14" placeholder="Your name or nickname (optional)" autocomplete="off">
     <div class="seg" id="gender"><button data-g="m">👦 He</button><button data-g="f">👧 She</button><button data-g="x" class="on">✨ Surprise me</button></div>
     <p class="notice" id="linkNotice" hidden></p><button class="btn ghost" id="viewChain" hidden>View the full group</button><button class="btn ghost" id="newChainIntro" hidden>Start a new chain</button>
+    <button class="btn ghost" id="newEdition" hidden>Start a new quiz edition</button>
     <button class="btn primary pulse" id="start">Lock in 🔒</button>
   </div>
   <div class="foot">No account. No tracking. No cap. Your answers live only in the link you share.</div>
@@ -180,7 +192,9 @@ button:disabled{opacity:.45;cursor:default}
   <div class="top"><div class="bar"><i id="prog"></i></div><span class="count" id="count">1/12</span></div>
   <div class="tag" id="tag"></div>
   <h2 class="q" id="qtext"></h2>
+  <p class="sub" id="questionInstruction" hidden>Pick what usually fits you. No right answers.</p>
   <div class="opts" id="opts"></div>
+  <button class="btn ghost" id="swapQuestion" hidden>Try a different question ↻</button><p class="notice" id="questionNotice" role="status" hidden></p>
 </section>
 
 <!-- RESULT -->
@@ -208,6 +222,7 @@ button:disabled{opacity:.45;cursor:default}
   <p class="notice" id="fullNotice" hidden>This chain is full at 64 people. You can still share the whole group.</p><button class="btn ghost" id="newChain" hidden>Start a new chain</button>
   <div class="actions">
     <button class="btn primary pulse" id="share">Send to a friend 📲</button>
+    <button class="btn ghost" id="remix" hidden>Remix my look ✨</button>
     <button class="btn ghost" id="pass">Friend plays on this phone 📱</button>
   </div>
   <div class="foot">Send the link. Every friend stays in the group as the next person joins. Aura farming, but wholesome.</div>
@@ -217,6 +232,9 @@ button:disabled{opacity:.45;cursor:default}
 <div class="toast" id="toast">Whole group link copied 📲</div>
 
 <script src="vibe-chain.js?v=1"></script>
+<script src="preferences/data-v1.js"></script>
+<script src="preferences/engine-v1.js"></script>
+<script src="preference-quiz.js"></script>
 <script>
 // axes: [chaos, chill, nerd, social]
 const Q=[
@@ -246,11 +264,17 @@ const state={i:0,a:[],order:[],name:"",gender:"x"};
 $("#gender").onclick=e=>{const b=e.target.closest("button");if(!b)return;state.gender=b.dataset.g;[...$("#gender").children].forEach(c=>c.classList.toggle("on",c===b))};
 
 // ---- group from URL ----
-const incomingLink=VibeChain.read(location.hash);
+const incomingLink=PreferenceQuiz.read(location.hash);
+let edition=incomingLink.edition,panel=incomingLink.panel;
 let incomingMembers=incomingLink.members,viewingFull=false;
 function memberName(p,i){return p.name||`Player ${i+1}`}
-function completedGroup(){return viewingFull?incomingMembers.map(p=>({...p,a:p.a.slice()})):VibeChain.append(incomingMembers,{a:state.a,name:state.name,g:state.gender})}
+function completedGroup(){
+  if(viewingFull)return incomingMembers.map(p=>({...p,a:p.a.slice(),...(p.q?{q:p.q.slice(),r:p.r.slice()}:{} )}));
+  return edition==="preferences"?PreferenceQuiz.append(incomingMembers,PreferenceQuiz.member(state.session,state.responses,state.name,state.gender,state.style)):VibeChain.append(incomingMembers,{a:state.a,name:state.name,g:state.gender});
+}
 function applyGroup(){
+  $("#s-intro .sub").textContent=edition==="preferences"?"12 picks from 80 questions. No right answers. Find your vibe, then meet your crew.":"12 questions. 60 seconds. Find your vibe, then see if your friends actually match. No cap.";
+  $("#newEdition").hidden=edition!=="legacy";
   const n=incomingMembers.length,full=n>=VibeChain.MAX_MEMBERS;
   $("#invite").hidden=!n;
   $("#invite").querySelector("span").textContent=n?`Join ${memberName(incomingMembers[0],0)}'s group · ${n} ${n===1?"person":"people"} so far`:"";
@@ -261,11 +285,11 @@ function applyGroup(){
   document.title=n?memberName(incomingMembers[0],0)+" sent you a vibe check":"VIBECHECK";
 }
 function newChain(){
-  incomingMembers=[];viewingFull=false;incomingLink.error=null;
+  incomingMembers=[];viewingFull=false;incomingLink.error=null;edition="preferences";panel=PreferenceQuiz.newPanel();
   history.replaceState(null,"",location.pathname+location.search);state.a=[];state.name="";$("#name").value="";
   applyGroup();show("#s-intro");
 }
-$("#newChain").onclick=newChain;$("#newChainIntro").onclick=newChain;
+$("#newEdition").onclick=newChain;$("#newChain").onclick=newChain;$("#newChainIntro").onclick=newChain;
 $("#viewChain").onclick=()=>{viewingFull=true;show("#s-result");$("#card").hidden=true;renderGroup(incomingMembers)};
 applyGroup();
 
@@ -286,7 +310,12 @@ function shuffledQuestions(random=Math.random){
 }
 function startQuiz(){
   if(incomingMembers.length>=VibeChain.MAX_MEMBERS)return;
-  viewingFull=false;state.name=Array.from($("#name").value.trim()).slice(0,14).join("");state.i=0;state.a=[];state.order=shuffledQuestions();show("#s-quiz");renderQ();
+  viewingFull=false;state.name=Array.from($("#name").value.trim()).slice(0,14).join("");state.i=0;state.a=[];
+  if(edition==="preferences"){
+    try{state.session=PreferenceQuiz.createSession(panel,incomingMembers);state.responses=[];state.style=PreferenceQuiz.newStyle()}
+    catch{ $("#linkNotice").hidden=false;$("#linkNotice").textContent="Your questions couldn't load this time. Tap Start to try again.";$("#start").textContent="Start · try again ↻";return }
+  }else state.order=shuffledQuestions();
+  show("#s-quiz");renderQ();
 }
 $("#start").onclick=startQuiz;
 // Advance the chain only when a new player takes the phone.
@@ -298,6 +327,15 @@ function passPhone(){
 $("#pass").onclick=passPhone;
 
 function renderQ(){
+  $("#questionInstruction").hidden=edition!=="preferences";
+  $("#questionNotice").hidden=true;$("#swapQuestion").hidden=edition!=="preferences";$("#swapQuestion").disabled=false;
+  if(edition==="preferences"){
+    const q=PreferenceQuiz.question(state.session,state.i);
+    $("#prog").style.width=(state.i/12*100)+"%";$("#count").textContent=(state.i+1)+"/12";
+    $("#tag").textContent=q.context.replace(/_/g," ");$("#qtext").textContent=q.prompt;
+    const box=$("#opts");box.className="opts preference-options";box.replaceChildren();
+    q.options.forEach((o,k)=>{const b=document.createElement("button");b.className="opt";b.textContent=o.text;b.onclick=()=>pick(k,b);box.appendChild(b)});return;
+  }
   const q=Q[state.order[state.i]];
   $("#prog").style.width=(state.i/Q.length*100)+"%";
   $("#count").textContent=(state.i+1)+"/"+Q.length;
@@ -305,10 +343,17 @@ function renderQ(){
   const box=$("#opts");box.className="opts";box.innerHTML="";
   q.o.forEach((o,k)=>{const b=document.createElement("button");b.className="opt";b.innerHTML=`<em>${o[0]}</em><span>${o[1]}</span>`;b.onclick=()=>pick(k,b);box.appendChild(b)});
 }
+$("#swapQuestion").onclick=()=>{
+  if(busy||edition!=="preferences")return;
+  try{state.session=PreferenceQuiz.swap(state.session,state.i,state.responses);renderQ()}
+  catch{$("#questionNotice").hidden=false;$("#questionNotice").textContent="No more swaps for this spot. You can answer if one fits, or leave the quiz unfinished."}
+};
 let busy=false;
 function pick(k,btn){
   if(busy)return;busy=true;
-  state.a[state.order[state.i]]=k;
+  if(edition==="preferences"){
+    const q=PreferenceQuiz.question(state.session,state.i);state.responses.push({question_id:q.id,question_version:1,option_id:q.options[k].id});$("#swapQuestion").disabled=true;
+  }else state.a[state.order[state.i]]=k;
   btn.classList.add("pick");[...btn.parentNode.children].forEach(c=>c!==btn&&c.classList.add("dim"));
   if(navigator.vibrate)navigator.vibrate(12);
   $("#prog").style.width=((state.i+1)/Q.length*100)+"%";
@@ -333,6 +378,12 @@ function match(a,b){
 function duo(p){return p>=80?"Twin flames 🔥 no cap":p>=60?"Certified duo 🤝 big W":p>=40?"Same planet, different orbit 🪐":"Opposites attract 🧲 lowkey cooked"}
 
 function finish(){
+  if(edition==="preferences"){
+    const group=completedGroup(),person=group[group.length-1];show("#s-result");$("#card").hidden=false;
+    $("#youlabel").textContent=state.name?`${state.name}'s preferences`:"A little more you";
+    $("#arche").textContent="Your vibe snapshot";$("#desc").textContent="A quick preference snapshot, not a fixed personality type.";$("#trivia").textContent="Early quiz edition · still being tested.";
+    renderSnapshot(PreferenceQuiz.profile(person));renderGroup(group);confetti();return;
+  }
   const {v,tr,arche}=score(state.a);
   show("#s-result");$("#card").hidden=false;
   $("#arche").textContent=arche.n+" "+arche.e;$("#desc").textContent=arche.d;
@@ -344,9 +395,38 @@ function finish(){
   confetti();
   renderGroup(completedGroup());
 }
+function snapshotAxis(parent,label){
+  const row=document.createElement("div"),title=document.createElement("strong");row.className="snapshot-axis";title.textContent=label;row.appendChild(title);parent.appendChild(row);return row;
+}
+function detailText(parent,text){const p=document.createElement("p");p.textContent=text;parent.appendChild(p)}
+function renderSnapshot(profile){
+  $("#stats").replaceChildren();
+  profile.axes.forEach(axis=>{
+    const row=snapshotAxis($("#stats"),axis.label);detailText(row,axis.band==="middle"?"A bit of both":`Leaning toward ${axis.band==="low"?axis.low:axis.high}`);const track=document.createElement("div"),poles=document.createElement("div");track.className="band-track";poles.className="band-poles";
+    ["low","middle","high"].forEach(band=>{const segment=document.createElement("span");segment.textContent=band==="middle"?"In between":band==="low"?"This way":"That way";segment.className=axis.band===band?"selected":"";if(axis.band===band)segment.setAttribute("aria-current","true");track.appendChild(segment)});
+    [axis.low,axis.high].forEach(pole=>{const span=document.createElement("span");span.textContent=pole;poles.appendChild(span)});row.appendChild(track);row.appendChild(poles);
+  });
+}
+function renderPreferenceGroup(group){
+  const n=group.length;$("#pairring").hidden=true;$("#groupDetails").hidden=n<2;
+  $("#vsTitle").textContent=n===2?group.map(memberName).join(" × "):"Group dynamics";
+  if(n===2){
+    const comparison=PreferenceQuiz.compare(group[0],group[1]);$("#duo").textContent=comparison.summary;
+    comparison.axes.forEach(axis=>{const row=snapshotAxis($("#energy"),axis.label);detailText(row,`${memberName(group[0],0)}: ${axis.left} · ${memberName(group[1],1)}: ${axis.right}`)});
+  }else if(n>=3){
+    const dynamics=PreferenceQuiz.group(group);$("#duo").textContent=`${dynamics.total} people · different preferences, one crew`;
+    dynamics.axes.forEach(axis=>{
+      const row=snapshotAxis($("#energy"),axis.label);
+      detailText(row,`${axis.low}: ${axis.counts.low} · In between: ${axis.counts.middle} · ${axis.high}: ${axis.counts.high}`);
+    });
+    dynamics.suggestions.forEach(suggestion=>{const chip=document.createElement("span");chip.textContent=suggestion;$("#both").appendChild(chip)});
+  }
+}
+$("#remix").onclick=()=>{if(edition!=="preferences"||viewingFull)return;state.style=PreferenceQuiz.newStyle();renderGroup(completedGroup())};
 let pairAnimation=0,castMembers=[];
 function renderGroup(group){
   const token=++pairAnimation,n=group.length,vs=$("#vs"),stage=$(".stage"),pair=n===2;
+  $("#remix").hidden=edition!=="preferences"||viewingFull;
   $("#app").classList.toggle("group-view",n>=3);
   $("#pairring").hidden=!pair;$("#groupDetails").hidden=n<3;
   $("#ringp").style.strokeDashoffset=440;$("#pct").textContent="0";
@@ -358,7 +438,8 @@ function renderGroup(group){
   $("#pass").disabled=n>=VibeChain.MAX_MEMBERS;
   $("#share").textContent=n>1?"Share the whole group 📲":"Send to a friend 📲";
   let shared=[];
-  if(pair){
+  if(edition==="preferences")renderPreferenceGroup(group);
+  else if(pair){
     const p=match(group[0].a,group[1].a);
     $("#vsTitle").textContent=group.map(memberName).join(" × ");$("#duo").textContent=duo(p);
     shared=Q.flatMap((q,i)=>group[0].a[i]===group[1].a[i]?[i]:[]);
@@ -370,9 +451,9 @@ function renderGroup(group){
     $("#closest").textContent=`Closest duo: ${memberName(group[d.closest.left],d.closest.left)} × ${memberName(group[d.closest.right],d.closest.right)} · ${d.closest.percent}%`;
   }
   shared.forEach(i=>{const chip=document.createElement("span");chip.textContent=Q[i].o[group[0].a[i]][0]+" "+Q[i].o[group[0].a[i]][1];$("#both").appendChild(chip)});
-  if(!shared.length){const chip=document.createElement("span");chip.textContent=n>=3?"No unanimous picks yet. Different tastes, one crew ✨":"Different picks, plenty of personality ✨";$("#both").appendChild(chip)}
+  if(edition!=="preferences"&&!shared.length){const chip=document.createElement("span");chip.textContent=n>=3?"No unanimous picks yet. Different tastes, one crew ✨":"Different picks, plenty of personality ✨";$("#both").appendChild(chip)}
   $("#chain").textContent=`🔗 ${n} ${n===1?"person":"people"} in this chain. Share the newest link to bring everyone along.`;
-  $("#roster").replaceChildren();group.forEach((p,i)=>{const li=document.createElement("li"),small=document.createElement("small");li.textContent=`${i+1}. ${memberName(p,i)}`;small.textContent=score(p.a).arche.n;li.appendChild(small);$("#roster").appendChild(li)});
+  $("#roster").replaceChildren();group.forEach((p,i)=>{const li=document.createElement("li"),small=document.createElement("small");li.textContent=`${i+1}. ${memberName(p,i)}`;small.textContent=edition==="preferences"?"Vibe snapshot":score(p.a).arche.n;li.appendChild(small);$("#roster").appendChild(li)});
   castMembers=group;renderCast();
 }
 function countUp(el,to,ms,token){const t0=performance.now();(function f(t){if(token!==pairAnimation)return;const k=Math.min(1,(t-t0)/ms);el.textContent=Math.round(to*(1-Math.pow(1-k,3)));if(k<1)requestAnimationFrame(f)})(t0)}
@@ -394,7 +475,7 @@ function renderCast(){
 
 // ---- share ----
 function shareLink(){
-  return location.origin+location.pathname+VibeChain.write(completedGroup());
+  return location.origin+location.pathname+(edition==="preferences"?PreferenceQuiz.write(completedGroup(),panel):VibeChain.write(completedGroup()));
 }
 $("#share").onclick=async()=>{
   let url;try{url=shareLink()}catch(e){$("#fullNotice").hidden=false;$("#fullNotice").textContent=e.message;return}

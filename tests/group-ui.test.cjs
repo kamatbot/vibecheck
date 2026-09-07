@@ -4,7 +4,7 @@ const part=(a,b)=>html.slice(html.indexOf(a),html.indexOf(b,html.indexOf(a)));
 function harness(){
  const nodes=new Map();function node(){return {hidden:false,disabled:false,children:[],style:{setProperty(){}},classList:{add(){},remove(){},toggle(){}},textContent:'',value:'',appendChild(n){this.children.push(n)},replaceChildren(){this.children=[]},prepend(){},after(){},querySelector(){return this.span??=node()},focus(){},lastElementChild:{click(){}}}}
  const $=s=>{if(!nodes.has(s))nodes.set(s,node());return nodes.get(s)};
- const ctx=vm.createContext({VibeChain,$,document:{querySelector:$,createElement:node},location:{hash:'',origin:'https://example.test',pathname:'/'},history:{replaceState(){}},setTimeout(){},requestAnimationFrame(){},performance:{now:()=>0},show(){},renderQ(){},buildVibe(p){ctx.built=p}});
+ const ctx=vm.createContext({VibeChain,PreferenceQuiz:{read:hash=>({...VibeChain.read(hash),edition:"legacy",panel:"A"}),newPanel:()=>"A"},$,document:{querySelector:$,createElement:node},location:{hash:'',origin:'https://example.test',pathname:'/'},history:{replaceState(){}},setTimeout(){},requestAnimationFrame(){},performance:{now:()=>0},show(){},renderQ(){},buildVibe(p){ctx.built=p}});
  vm.runInContext(part('// axes:','$("#gender").onclick')+part('// ---- group from URL ----','// floating emoji bg')+part('function passPhone(){','function renderQ')+part('function score(a){','function finish(){')+part('let pairAnimation=','// ---- share ----')+part('function shareLink(){','$("#share").onclick')+part('function seed(str){','const AVATARS=')+part('const pool=g=>','// which attributes'),ctx);
  return {ctx,$,run:s=>vm.runInContext(s,ctx)};
 }
