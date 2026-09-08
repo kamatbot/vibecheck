@@ -1,0 +1,186 @@
+{
+  "asset": "twin.glb",
+  "version": 1,
+  "generator": "blender/make_twin.py",
+  "blenderVersion": "5.2.1 LTS",
+  "coordinates": {
+    "up": "Y",
+    "forward": "+Z",
+    "units": "metres",
+    "feetY": 0,
+    "approximateHeight": 1.731
+  },
+  "defaultHair": "Hair_Waves",
+  "hairGroups": [
+    "Hair_Crop",
+    "Hair_Waves",
+    "Hair_Bob",
+    "Hair_Long"
+  ],
+  "requiredMaterials": [
+    "Skin",
+    "Lips",
+    "Hair",
+    "Brows",
+    "Iris",
+    "Sclera",
+    "Top",
+    "Pants",
+    "Shoes",
+    "Sole"
+  ],
+  "materialColorGroups": {
+    "skin": [
+      "Skin"
+    ],
+    "lips": [
+      "Lips"
+    ],
+    "hair": [
+      "Hair",
+      "Brows"
+    ],
+    "iris": [
+      "Iris",
+      "Iris_Inner",
+      "Iris_Rim",
+      "Iris_Fiber"
+    ],
+    "top": [
+      "Top",
+      "Top_Seam"
+    ],
+    "pants": [
+      "Pants",
+      "Pants_Seam"
+    ],
+    "shoes": [
+      "Shoes",
+      "Shoe_Panel"
+    ],
+    "sole": [
+      "Sole"
+    ]
+  },
+  "morphs": {
+    "FaceWidth": {
+      "min": -1,
+      "max": 1,
+      "default": 0,
+      "safeRange": [
+        -1,
+        1
+      ]
+    },
+    "JawWidth": {
+      "min": -1,
+      "max": 1,
+      "default": 0,
+      "safeRange": [
+        -1,
+        1
+      ]
+    },
+    "NoseWidth": {
+      "min": -1,
+      "max": 1,
+      "default": 0,
+      "safeRange": [
+        -1,
+        1
+      ]
+    },
+    "NoseLength": {
+      "min": -1,
+      "max": 1,
+      "default": 0,
+      "safeRange": [
+        -1,
+        1
+      ]
+    },
+    "EyeSize": {
+      "min": -1,
+      "max": 1,
+      "default": 0,
+      "safeRange": [
+        -1,
+        1
+      ]
+    },
+    "EyeSpacing": {
+      "min": -1,
+      "max": 1,
+      "default": 0,
+      "safeRange": [
+        -1,
+        1
+      ]
+    },
+    "LipFullness": {
+      "min": -1,
+      "max": 1,
+      "default": 0,
+      "safeRange": [
+        -1,
+        1
+      ]
+    },
+    "Smile": {
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "safeRange": [
+        0,
+        1
+      ]
+    },
+    "BodyShape": {
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "safeRange": [
+        0,
+        1
+      ]
+    }
+  },
+  "morphUsage": "Traverse every mesh; set each matching morphTargetDictionary entry to the same requested value. Negative facial weights are intentional. Apply all requested weights to all meshes including hidden hair variants.",
+  "hairUsage": "All four parent groups are exported. Immediately hide all Hair_* groups except the selected exact name. Mesh children inherit visibility. Do not infer style from mesh names.",
+  "meshCount": 15,
+  "baseTriangles": 175440,
+  "hairTriangles": {
+    "Hair_Crop": 12414,
+    "Hair_Waves": 12930,
+    "Hair_Bob": 23256,
+    "Hair_Long": 23256
+  },
+  "visibleTrianglesByHair": {
+    "Hair_Crop": 187854,
+    "Hair_Waves": 188370,
+    "Hair_Bob": 198696,
+    "Hair_Long": 198696
+  },
+  "glbBytes": 10242568,
+  "blenderBoundsXYZ": [
+    [
+      -0.3135681748390198,
+      0.3318397104740143
+    ],
+    [
+      -0.19171328842639923,
+      0.14140993356704712
+    ],
+    [
+      0.0,
+      1.731099247932434
+    ]
+  ],
+  "limitations": [
+    "Single original androgynous adult-ish base; not an exact photo reconstruction.",
+    "No animation skeleton or facial speech rig in this first slice.",
+    "Clothing is the fixed original crewneck, tailored trousers and sneakers; color and BodyShape are editable.",
+    "Minor overlaps can occur when many facial controls are combined at all extremes; intended conservative manual editor range is documented per target."
+  ],
+  "authorship": "Original procedural geometry and materials. No downloaded, paid, licensed or generative image assets."
+}

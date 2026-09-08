@@ -1,0 +1,8 @@
+node_modules
+dist/
+.codex/
+.DS_Store
+.impeccable/
+*.blend1
+blender/build.log
+blender/validation-output.json

@@ -1,0 +1,103 @@
+{
+  "status": "PASS",
+  "glbSha256": "c2d34b0f474fbc642558714391bf2a31fc104abd158133f51f9f091359c23839",
+  "glbBytes": 10242568,
+  "glbMiB": 9.77,
+  "meshCount": 15,
+  "primitiveCount": 45,
+  "allVariantsTriangles": 247296,
+  "visibleTrianglesByHair": {
+    "Hair_Crop": 187854,
+    "Hair_Waves": 188370,
+    "Hair_Bob": 198696,
+    "Hair_Long": 198696
+  },
+  "baseBoundsYUp": [
+    [
+      -0.3135681748390198,
+      0.0,
+      -0.14140993356704712
+    ],
+    [
+      0.3318397104740143,
+      1.731099247932434,
+      0.19171328842639923
+    ]
+  ],
+  "simultaneousExtremesBoundsYUp": {
+    "min": [
+      [
+        -0.3135681748390198,
+        0.0,
+        -0.14140993356704712
+      ],
+      [
+        0.3318397104740143,
+        1.731099247932434,
+        0.19171328842639923
+      ]
+    ],
+    "max": [
+      [
+        -0.3365681767463684,
+        0.0,
+        -0.14140993356704712
+      ],
+      [
+        0.3548397123813629,
+        1.731099247932434,
+        0.19171328842639923
+      ]
+    ]
+  },
+  "morphMaximumDisplacementsMetres": {
+    "BodyShape": 0.0407156814977854,
+    "NoseLength": 0.007628400955903382,
+    "NoseWidth": 0.002885621041059494,
+    "EyeSize": 0.004949603918786112,
+    "JawWidth": 0.016957685351371765,
+    "FaceWidth": 0.013919636607170105,
+    "LipFullness": 0.003473306646434049,
+    "Smile": 0.009387922583285666,
+    "EyeSpacing": 0.005800001323223114
+  },
+  "hairGroups": [
+    "Hair_Crop",
+    "Hair_Waves",
+    "Hair_Bob",
+    "Hair_Long"
+  ],
+  "requiredMaterialsVerified": [
+    "Skin",
+    "Lips",
+    "Hair",
+    "Brows",
+    "Iris",
+    "Sclera",
+    "Top",
+    "Pants",
+    "Shoes",
+    "Sole"
+  ],
+  "morphNamesVerified": [
+    "BodyShape",
+    "EyeSize",
+    "EyeSpacing",
+    "FaceWidth",
+    "JawWidth",
+    "LipFullness",
+    "NoseLength",
+    "NoseWidth",
+    "Smile"
+  ],
+  "visualEvidence": [
+    "twin-fullbody.png",
+    "twin-face.png",
+    "twin-face-min.png",
+    "twin-face-max.png",
+    "twin-body-max.png",
+    "Hair_Crop.png",
+    "Hair_Bob.png",
+    "Hair_Long.png"
+  ]
+}
