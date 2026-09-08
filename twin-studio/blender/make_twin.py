@@ -4,9 +4,9 @@ Rebuild with Blender 5.2:
   /Applications/Blender.app/Contents/MacOS/Blender -b --python blender/make_twin.py
 
 All geometry is authored here; no external asset or texture is used. Blender is
-Z-up, facing -Y. The glTF exporter converts to Y-up, facing +Z. Linear shape
-keys expose conservative, combinable editorial changes, not a rigged identity
-reconstruction. The .blend retains the editable meshes and shape-key library.
+Z-up, facing -Y. The glTF exporter converts to Y-up, facing +Z. The head and hair are implicit
+sculpts (numpy signed-distance fields meshed through the bundled OpenVDB); linear
+shape keys expose conservative, combinable editorial changes. The .blend retains the editable meshes and shape-key library.
 """
 import bpy, math, os, json, random
 from mathutils import Vector
@@ -193,180 +193,191 @@ def clamp(x,a=0,b=1):return min(b,max(a,x))
 def smooth(a,b,x):
     t=clamp((x-a)/(b-a));return t*t*(3-2*t)
 
-# Continuous head: cross-section silhouette with cheek planes, eye sockets,
-# muzzle, integrated bridge/tip/alae, brow ridge, philtrum and a defined chin.
-PROFILE=[(1.390,.010,.018,.020),(1.398,.040,.060,.036),
- (1.414,.068,.073,.048),(1.438,.090,.079,.067),(1.470,.099,.088,.086),
- (1.503,.111,.093,.101),(1.540,.109,.094,.107),(1.577,.108,.091,.108),
- (1.615,.106,.090,.102),(1.650,.096,.080,.090),(1.682,.066,.055,.061),
- (1.702,.015,.013,.014),(1.704,.001,.001,.001)]
+# Head: an implicit sculpt. Anatomical volumes (cranium, frontal bone, cheek and
+# zygomatic masses, mandible, chin, nose, lips, lids, ears, brows) are signed
+# distance primitives blended with smooth minimums, carved for the sockets,
+# nostrils, mouth seam and eye openings, then meshed through OpenVDB. Overhangs
+# such as the nose tip, lips, brow and lids are real volumes, not a height field.
+import numpy as np, openvdb as vdb, tempfile, bmesh
+TMP=tempfile.mkdtemp()
 
-def face_y(x,z):
-    w,fd,bd=interp(PROFILE,z)
-    base=-fd*sqrt(max(.005,1-(x/max(w,.001))**2))
-    d=0
-    # Expressive sockets, subtle raised cheeks and brow volumes.
-    for side in (-1,1):
-        ex=side*.044
-        d += .0095*gauss(x,z,ex,1.566,.033,.018)
-        d -= .0090*gauss(x,z,side*.060,1.509,.039,.030)
-        d -= .0075*gauss(x,z,side*.041,1.594,.035,.013)
-        d += .0028*gauss(x,z,side*.038,1.483,.008,.018)
-        d -= .0110*gauss(x,z,side*.0165,1.505,.011,.009)
-    d -= .018*gauss(x,z,0,1.548,.012,.039)
-    d -= .029*gauss(x,z,.001,1.514,.0175,.014)
-    d -= .006*gauss(x,z,0,1.490,.010,.013)
-    d -= .006*gauss(x,z,0,1.465,.034,.018)
-    d -= .010*gauss(x,z,0,1.419,.037,.016)
-    d += .002*gauss(x,z,0,1.483,.0035,.008)
-    d += .0017*gauss(x,z,0,1.443,.026,.005)
-    d -= .0012*gauss(x,z,-.045,1.523,.025,.038)
-    return base+d
+class Grid:
+    def __init__(self,lo,hi,h):
+        self.h=h;self.axes=[np.arange(a,b+h/2,h,dtype=np.float32) for a,b in zip(lo,hi)]
+        self.X,self.Y,self.Z=np.meshgrid(*self.axes,indexing='ij');self.P=(self.X,self.Y,self.Z)
+        self.origin=np.array([self.axes[0][0],self.axes[1][0],self.axes[2][0]],dtype=np.float32)
+    def surface_y(self,field,x,z):
+        # Front-most zero crossing of a sampled column places surface details.
+        i=int(round((x-self.axes[0][0])/self.h));k=int(round((z-self.axes[2][0])/self.h))
+        col=field[i,:,k];j=int(np.argmax(col<=0))
+        if j==0:return float(self.axes[1][0])
+        a,b=float(col[j-1]),float(col[j]);return float(self.axes[1][j-1])+self.h*a/(a-b)
+    def surface(self,field,name,mat,part,parent=None,adaptivity=.08):
+        g=vdb.FloatGrid();g.copyFromArray(np.ascontiguousarray(np.clip(field,-.03,.03),dtype=np.float32))
+        g.gridClass=vdb.GridClass.LEVEL_SET;g.name='sdf';g.transform=vdb.createLinearTransform(voxelSize=self.h)
+        path=os.path.join(TMP,name+'_grid.vdb');vdb.write(path,grids=[g])
+        bpy.ops.object.volume_import(filepath=path,align='WORLD');vol=bpy.context.object
+        me=bpy.data.meshes.new(name+' — surface');o=bpy.data.objects.new(name,me);CHAR.objects.link(o)
+        m=o.modifiers.new('Level set surface','VOLUME_TO_MESH');m.object=vol;m.grid_name='sdf';m.threshold=0
+        m.adaptivity=adaptivity;m.resolution_mode='VOXEL_SIZE';m.voxel_size=self.h;apply_mod(o,m)
+        co=np.empty(len(me.vertices)*3,dtype=np.float32);me.vertices.foreach_get('co',co)
+        me.vertices.foreach_set('co',(co.reshape(-1,3)+self.origin).ravel())
+        data=vol.data;bpy.data.objects.remove(vol);bpy.data.volumes.remove(data);os.remove(path)
+        me.materials.append(M[mat] if isinstance(mat,str) else mat)
+        for p in me.polygons:p.use_smooth=True
+        o['part']=part
+        if parent:o.parent=parent
+        OWN.append(o);return o
 
-verts=[];faces=[];N=112;R=86
-for j in range(R):
-    z=1.390+(1.704-1.390)*j/(R-1)
-    w,fd,bd=interp(PROFILE,z)
-    for i in range(N):
-        a=2*pi*i/N;xx=w*cos(a);front=-sin(a)
-        yy=-fd*front if front>=0 else -bd*front
-        if front>0:
-            ellipse=-fd*sqrt(max(.005,1-(xx/max(w,.001))**2))
-            yy+=(face_y(xx,z)-ellipse)*smooth(.05,.8,front)
-        xx+=.0013*sin((z-1.39)*14)*smooth(.02,.8,front)
-        verts.append((xx,yy,z))
-for j in range(R-1):
-    for i in range(N):
-        a=j*N+i;b=j*N+(i+1)%N;faces.append((a,b,b+N,a+N))
-faces += [tuple(reversed(range(N))),tuple((R-1)*N+i for i in range(N))]
-head=mesh('Head_Sculpt',verts,faces,'Skin','head')
-m=head.modifiers.new('Gentle sculpt polish','SMOOTH');m.factor=.35;m.iterations=2;apply_mod(head,m)
+def centers(o):
+    c=np.empty(len(o.data.polygons)*3,dtype=np.float32);o.data.polygons.foreach_get('center',c);c=c.reshape(-1,3)
+    return (c[:,0],c[:,1],c[:,2])
+def polish(o,target,iterations=2):
+    m=o.modifiers.new('Level set polish','SMOOTH');m.factor=.5;m.iterations=iterations;apply_mod(o,m)
+    tris=sum(len(p.vertices)-2 for p in o.data.polygons)
+    if tris>target:
+        m=o.modifiers.new('Sculpt topology economy','DECIMATE');m.ratio=target/tris;apply_mod(o,m)
+
+def sstep(a,b,x):
+    t=np.clip((x-a)/(b-a),0,1);return t*t*(3-2*t)
+def smin(a,b,k):
+    h=np.clip(.5+.5*(b-a)/k,0,1);return b+(a-b)*h-k*h*(1-h)
+def ssub(a,b,k):return -smin(-a,b,k)
+def smax(a,b,k):return -smin(-a,-b,k)
+def sphere(P,c,r):X,Y,Z=P;return np.sqrt((X-c[0])**2+(Y-c[1])**2+(Z-c[2])**2)-r
+def ell(P,c,r):
+    X,Y,Z=P;px=(X-c[0])/r[0];py=(Y-c[1])/r[1];pz=(Z-c[2])/r[2]
+    k0=np.sqrt(px*px+py*py+pz*pz);k1=np.sqrt((px/r[0])**2+(py/r[1])**2+(pz/r[2])**2)
+    return k0*(k0-1)/np.maximum(k1,1e-6)
+def cap(P,a,b,r0,r1=None):
+    X,Y,Z=P;r1=r0 if r1 is None else r1
+    ax,ay,az=X-a[0],Y-a[1],Z-a[2];bx,by,bz=b[0]-a[0],b[1]-a[1],b[2]-a[2]
+    t=np.clip((ax*bx+ay*by+az*bz)/(bx*bx+by*by+bz*bz),0,1)
+    return np.sqrt((ax-bx*t)**2+(ay-by*t)**2+(az-bz*t)**2)-(r0+(r1-r0)*t)
+def chain(P,pts,radii,k=.004):
+    d=None
+    for i in range(len(pts)-1):
+        c=cap(P,pts[i],pts[i+1],radii[i],radii[i+1]);d=c if d is None else smin(d,c,k)
+    return d
+def mirrored(half):return half+[(-x,y,z) for x,y,z in half[-2::-1]]
+
+EYE_Z=1.556;EYE_X=.046;EYE_Y=-.052;EYE_R=.0295;EYE_W=.0265
+MOUTH_Z=1.462;MOUTH_W=.037
+def mouthline(x):return MOUTH_Z+.0035*(abs(x)/MOUTH_W)**2
+def lid_up(s,dx):
+    f=np.sqrt(np.clip(1-(dx/EYE_W)**2,0,None));return .0125*f**.8*(1-.12*s*dx/EYE_W)
+def lid_down(s,dx):
+    f=np.sqrt(np.clip(1-(dx/EYE_W)**2,0,None));return .0085*f**.7*(1+.15*s*dx/EYE_W)
+def lid_tilt(s,dx):return s*dx*.07+.001
+def opening(P,s):
+    X,Y,Z=P;dx=X-s*EYE_X;dz=Z-EYE_Z-lid_tilt(s,dx)
+    d=np.maximum(np.maximum(dz-lid_up(s,dx),-dz-lid_down(s,dx)),np.abs(dx)-EYE_W)
+    return np.maximum(d,Y-(EYE_Y+.002))
+
+LIP_UPPER=mirrored([(-.037,-.089,MOUTH_Z+.0045),(-.024,-.101,MOUTH_Z+.0065),(-.0085,-.108,MOUTH_Z+.0075),(0,-.1068,MOUTH_Z+.0068)])
+LIP_UPPER_R=[.0030,.0052,.0056,.0054,.0056,.0052,.0030]
+LIP_LOWER=mirrored([(-.036,-.089,MOUTH_Z+.0025),(-.021,-.102,MOUTH_Z-.0058),(0,-.1065,MOUTH_Z-.0075)])
+LIP_LOWER_R=[.0030,.0062,.0066,.0062,.0030]
+SEAM=mirrored([(-.037,0,mouthline(.037)),(-.020,0,mouthline(.020)),(0,0,MOUTH_Z)])
+def lips(P):return smin(chain(P,LIP_UPPER,LIP_UPPER_R),chain(P,LIP_LOWER,LIP_LOWER_R),.003)
+def seam(P):
+    X,Y,Z=P;flat=(X,np.zeros_like(Y),Z)
+    return np.maximum(chain(flat,SEAM,[.0011]*len(SEAM),.001),np.abs(Y+.104)-.010)
+def nostrils(P):
+    return np.minimum(*[ell(P,(s*.0095,-.109,1.4915),(.0046,.0055,.0034)) for s in (-1,1)])
+
+def sdf_skull(P):
+    d=ell(P,(0,.020,1.598),(.104,.110,.108))                       # cranium
+    d=smin(d,ell(P,(0,-.040,1.628),(.088,.062,.078)),.03)           # frontal bone
+    d=smin(d,ell(P,(0,.030,1.560),(.106,.100,.085)),.03)            # temporal width
+    for s in (-1,1):d=smin(d,ell(P,(s*.113,.014,1.540),(.009,.020,.032)),.008)  # ear plates
+    return d
+
+def sdf_head(P):
+    d=sdf_skull(P)
+    d=smin(d,cap(P,(0,.025,1.40),(0,.025,1.50),.050),.025)          # under-jaw core to neck
+    for s in (-1,1):
+        d=smin(d,ell(P,(s*.049,-.038,1.512),(.061,.056,.056)),.030)  # cheek mass
+        d=smin(d,ell(P,(s*.074,-.030,1.540),(.026,.034,.024)),.022)  # zygomatic
+        d=smin(d,ell(P,(s*.054,-.046,1.468),(.038,.036,.036)),.026)  # buccal fullness
+        d=smin(d,cap(P,(s*.092,.032,1.515),(s*.075,.012,1.442),.019),.018)   # ramus
+        d=smin(d,cap(P,(s*.075,.012,1.442),(s*.026,-.078,1.408),.018),.020)  # mandible
+        d=smin(d,cap(P,(0,-.088,1.593),(s*.056,-.078,1.598),.012),.014)      # brow ridge
+    d=smin(d,ell(P,(0,-.052,1.497),(.044,.050,.040)),.02)           # maxilla
+    d=smin(d,ell(P,(0,-.048,1.468),(.058,.054,.044)),.02)           # muzzle
+    d=smin(d,ell(P,(0,-.072,1.412),(.036,.030,.026)),.018)          # chin
+    for s in (-1,1):d=ssub(d,ell(P,(s*.047,-.064,1.563),(.034,.030,.026)),.012)  # orbits
+    for s in (-1,1):d=smin(d,sphere(P,(s*EYE_X,EYE_Y,EYE_Z),EYE_R+.0030),.010)   # lids
+    n=cap(P,(0,-.094,1.572),(0,-.126,1.511),.0095,.0118)            # dorsum
+    n=smin(n,sphere(P,(0,-.127,1.507),.0145),.008)                  # tip
+    for s in (-1,1):n=smin(n,ell(P,(s*.0175,-.111,1.503),(.0125,.012,.0105)),.007)  # alae
+    n=smin(n,cap(P,(0,-.124,1.496),(0,-.106,1.492),.0055),.006)     # columella
+    d=smin(d,n,.012)
+    d=ssub(d,nostrils(P),.002)
+    d=smin(d,lips(P),.006)
+    d=ssub(d,seam(P),.0012)
+    for s in (-1,1):d=ssub(d,opening(P,s),.0008)
+    for s in (-1,1):                                                # ears
+        d=ssub(d,ell(P,(s*.121,.013,1.536),(.009,.013,.019)),.003)  # concha bowl
+        rim=[(s*.113,-.002,1.560),(s*.118,.010,1.574),(s*.121,.028,1.563),(s*.1225,.035,1.540),(s*.120,.030,1.515),(s*.114,.016,1.499)]
+        d=smin(d,chain(P,rim,[.0034,.0040,.0042,.0042,.0038,.0034],.003),.003)  # helix
+        d=smin(d,chain(P,[(s*.117,.021,1.514),(s*.1195,.022,1.542),(s*.117,.012,1.560)],[.0026,.0032,.0026],.003),.0025)  # antihelix
+        d=smin(d,ell(P,(s*.110,-.005,1.536),(.005,.006,.008)),.004)  # tragus
+        d=smin(d,ell(P,(s*.113,.015,1.503),(.007,.011,.009)),.008)   # lobe
+    return d
+
+G=Grid((-.136,-.156,1.368),(.136,.140,1.716),.0015)
+field=sdf_head(G.P)
+head=G.surface(field,'Head_Sculpt','Skin','head')
+polish(head,42000)
+for key in ('Lips','MouthCrease','Nostril'):head.data.materials.append(M[key])
+C=centers(head);idx=np.zeros(len(head.data.polygons),dtype=np.int32)
+idx[lips(C)<.0009]=1;idx[seam(C)<.0007]=2;idx[nostrils(C)<.0006]=3
+head.data.polygons.foreach_set('material_index',idx)
+# Tapered brow ribbons follow the sampled forehead surface.
+for s in (-1,1):
+    pts=[]
+    for i in range(11):
+        t=i/10;xx=s*(.018+.056*t);zz=1.599+.010*sin(pi*t)-.001*t
+        pts.append((xx,G.surface_y(field,xx,zz)-.0022,zz))
+    tube('Brow_'+('L' if s<0 else 'R'),pts,.0040,'Brows','brow_'+('L' if s<0 else 'R'),radii=[.45,.9,1,.95,.72,.12],resolution=3,sides=8,flat=.55)
+del field
 
 # Neck has trapezius flare beneath the crew neck and a proper under-chin join.
 loft('Neck',[(0,.022,1.284,.075,.060),(0,.022,1.323,.060,.047),
  (0,.021,1.366,.042,.040),(0,.022,1.414,.045,.038),(0,.024,1.443,.050,.041)],'Skin','neck',40,1)
 
-# Ears: pinna base, recessed concha, continuous helix and antihelix.
-for side in (-1,1):
-    s='L' if side<0 else 'R'
-    ellipsoid('Ear_'+s,(side*.109,.011,1.545),(.021,.016,.036),'Skin','ear',32,20)
-    ellipsoid('Ear_Concha_'+s,(side*.119,-.003,1.545),(.009,.006,.019),'Lips','ear',24,16)
-    pts=[(side*x,y,z) for x,y,z in [(.110,-.007,1.517),(.125,-.006,1.524),(.129,-.004,1.548),(.127,.000,1.571),(.115,-.002,1.577),(.109,-.004,1.568)]]
-    tube('Ear_Helix_'+s,pts,.0042,'Skin','ear',radii=[.5,.85,1,.95,.75,.2],resolution=5,sides=8)
-    pts=[(side*x,y,z) for x,y,z in [(.115,-.010,1.523),(.119,-.010,1.540),(.117,-.010,1.558),(.121,-.006,1.568)]]
-    tube('Ear_Antihelix_'+s,pts,.0028,'Skin','ear',radii=[.3,1,.9,.15],resolution=4,sides=8)
-    ellipsoid('Ear_Tragus_'+s,(side*.108,-.008,1.539),(.0045,.005,.008),'Skin','ear',20,12)
-
-# Eye openings are almond patches on embedded spherical corneas, framed by
-# tapered skin lids. Irises are concentric geometric lenses with radial fibers.
-EYE_Z=1.566;EYE_X=.043;EYE_Y=-.0705;EYE_R=.0295
-def eyefront(dx,dz):return EYE_Y-sqrt(max(.000004,EYE_R**2-dx*dx-dz*dz))
-def eyelid_point(side,t,outer=0):
-    # t traverses a closed almond; slight outer-corner rise avoids a doll stare.
-    dx=cos(t)*(.0270+outer)
-    h=(.0105 if sin(t)>0 else .0068)+outer*.58
-    dz=sin(t)*h+side*dx*.055
-    return (side*EYE_X+dx,eyefront(dx,dz)+outer*.27,EYE_Z+dz)
-
-for side in (-1,1):
-    sn='L' if side<0 else 'R';part='eye_'+sn
-    ev=[(side*EYE_X,eyefront(0,0),EYE_Z)]
-    EF=[];rings=9;seg=64
-    for j in range(1,rings+1):
-        rr=j/rings
+# Eyeballs are real spheres set behind the sculpted lids: sclera, a raised
+# cornea carrying a concentric iris with radial fibres, pupil and limbal ring.
+for s in (-1,1):
+    sn='L' if s<0 else 'R';part='eye_'+sn;c=Vector((s*EYE_X,EYE_Y,EYE_Z))
+    IR=math.radians(26);phis=[IR*(i/12)**1.15 for i in range(1,13)]+[IR+(pi-IR)*i/16 for i in range(1,17)]
+    seg=48;vv=[tuple(c+Vector((0,-EYE_R-.0006,0)))];ff=[]
+    for ph in phis:
+        bulge=.0006*max(0,cos(ph/IR*pi/2)) if ph<IR else 0
         for i in range(seg):
-            p=eyelid_point(side,2*pi*i/seg)
-            dx=(p[0]-side*EYE_X)*rr;dz=(p[2]-EYE_Z)*rr
-            ev.append((side*EYE_X+dx,eyefront(dx,dz),EYE_Z+dz))
-    for i in range(seg):EF.append((0,1+i,1+(i+1)%seg))
-    for j in range(rings-1):
+            th=2*pi*i/seg;dirv=Vector((sin(ph)*cos(th),-cos(ph),sin(ph)*sin(th)))
+            vv.append(tuple(c+dirv*(EYE_R+bulge)))
+    for i in range(seg):ff.append((0,1+(i+1)%seg,1+i))
+    for j in range(len(phis)-1):
         for i in range(seg):
-            a=1+j*seg+i;b=1+j*seg+(i+1)%seg;EF.append((a,a+seg,b+seg,b))
-    mesh('Eye_Sclera_'+sn,ev,EF,'Sclera',part)
-    # A socket-to-eye transition, with an actual inner waterline.
-    lv=[];lf=[]
-    for k,off in enumerate((0,.0016,.0038,.0075)):
-        for i in range(seg):
-            p=list(eyelid_point(side,2*pi*i/seg,off))
-            if k==0:p[1]-=.0006
-            elif k==1:p[1]-=.0014
-            elif k==2:p[1]-=.0006
-            else:p[1]=face_y(p[0],p[2])-.0007
-            lv.append(tuple(p))
-    for k in range(3):
-        for i in range(seg):
-            a=k*seg+i;b=k*seg+(i+1)%seg;lf.append((a,b,b+seg,a+seg))
-    mesh('Eyelids_'+sn,lv,[tuple(reversed(f)) for f in lf],'Skin',part)
-    # Thin, tapered upper lashes and naturally broken lower waterline.
-    pts=[eyelid_point(side,pi*t/12,.0002) for t in range(13)]
-    pts=[(x,y-.001,z+.0002) for x,y,z in pts]
-    tube('Lash_Line_'+sn,pts,.00105,'Brows',part,radii=[.08,.65,.9,1,.8,.5,.12],resolution=2,sides=6)
+            a=1+j*seg+i;b=1+j*seg+(i+1)%seg;ff.append((a,a+seg,b+seg,b))
+    eye=mesh('Eyeball_'+sn,vv,ff,'Sclera',part)
+    for key in ('Pupil','Iris_Inner','Iris','Iris_Fiber','Iris_Rim'):eye.data.materials.append(M[key])
+    bounds=[math.radians(a) for a in (8.5,12,22.5,26)]
+    for p in eye.data.polygons:
+        ring=0 if p.index<seg else 1+(p.index-seg)//seg
+        mid=(phis[ring-1] if ring else 0)+(phis[ring]-(phis[ring-1] if ring else 0))/2 if ring<len(phis) else pi
+        p.material_index=1 if mid<bounds[0] else 2 if mid<bounds[1] else (4 if p.index%5==0 else 3) if mid<bounds[2] else 5 if mid<bounds[3] else 0
+    for j,(dx,dz,r) in enumerate([(-.0034,.0052,.0026),(.0040,-.0036,.0010)]):
+        dirv=Vector((dx,-EYE_R,dz)).normalized()
+        ellipsoid('Eye_Glint_'+sn+'_'+str(j),tuple(c+dirv*(EYE_R+.0009)),(r,.0005,r),'Catchlight',part,20,12)
+    # A fine lash line along the sculpted upper lid edge reads at portrait scale.
     pts=[]
-    for i in range(9):
-        t=.16*pi+.68*pi*i/8;p=list(eyelid_point(side,t,.0058));p[2]+=.004;p[1]=face_y(p[0],p[2])-.001
-        pts.append(p)
-    tube('Lid_Crease_'+sn,pts,.0007,'Lips',part,radii=[.05,.7,1,.8,.05],resolution=2,sides=6)
-    # Lens rings sit flush on the eye globe; pupil and dark limbal ring inset.
-    iv=[];ifs=[];IR=.0107;rad=[0,.0042,.0049,.0072,.0100,.0107]
-    for rr in rad:
-        for i in range(64):
-            t=2*pi*i/64;dx=rr*cos(t);dz=rr*sin(t)+.0002
-            almond=sqrt(max(.01,1-(dx/.0270)**2))
-            dz=clamp(dz,-.0068*almond+side*dx*.055+.0004,.0105*almond+side*dx*.055-.0004)
-            iv.append((side*EYE_X+dx,eyefront(dx,dz)-.00030,EYE_Z+dz))
-    for j in range(len(rad)-1):
-        for i in range(64):
-            a=j*64+i;b=j*64+(i+1)%64;ifs.append((a,b,b+64,a+64))
-    io=mesh('Iris_Lens_'+sn,iv,[tuple(reversed(f)) for f in ifs],'Iris',part)
-    for key in ('Pupil','Iris_Inner','Iris_Rim','Iris_Fiber'):io.data.materials.append(M[key])
-    for p in io.data.polygons:
-        ring=p.index//64
-        p.material_index=1 if ring==0 else 2 if ring==1 else 3 if ring==4 else (4 if p.index%7==0 else 0)
-    for j,(dx,dz,r) in enumerate([(-.0031,.0048,.0020),(.0038,-.0034,.00072)]):
-        ellipsoid('Eye_Glint_'+sn+'_'+str(j),(side*EYE_X+dx,eyefront(dx,dz)-.00065,EYE_Z+dz),(r,.00045,r),'Catchlight',part,16,10)
-    # Tapered brow ribbon, plus fine directional edge hairs.
-    pts=[]
-    for i in range(11):
-        t=i/10;xx=side*(.018+.061*t);zz=1.602+.009*sin(pi*t)-.003*t+(side*.0015)
-        pts.append((xx,face_y(xx,zz)-.0024,zz))
-    tube('Brow_'+sn,pts,.0039,'Brows','brow_'+sn,radii=[.45,.9,1,.95,.72,.12],resolution=3,sides=8,flat=.60)
-    for i in range(12):
-        t=(i+.2)/13;xx=side*(.018+.061*t);zz=1.602+.009*sin(pi*t)-.003*t+(side*.0015)
-        xx2=xx+side*.0035;zz2=zz+.0040*(1-t)
-        tube('Brow_Fiber_'+sn+'_'+str(i),[(xx,face_y(xx,zz)-.003,zz),(xx2,face_y(xx2,zz2)-.003,zz2)],.00042,'Brows','brow_'+sn,radii=[1,.05],resolution=1,sides=4)
-
-# Nostrils and alar folds sit on the integrated nose, not separate nose balls.
-for side in (-1,1):
-    xx=side*.0128;zz=1.5020;yy=face_y(xx,zz)
-    ellipsoid('Nostril_'+str(side),(xx,yy-.0006,zz),(.0049,.00125,.0025),'Nostril','nose',24,12)
-    pts=[]
-    for i in range(6):
-        t=i/5;xx=side*(.019+.002*sin(pi*t));zz=1.509-.010*t
-        pts.append((xx,face_y(xx,zz)-.0004,zz))
-    tube('Alar_Fold_'+str(side),pts,.00052,'Lips','nose',radii=[.05,.4,.9,.2],resolution=2,sides=6)
-
-# Lip surfaces share a shaped cupid's bow and a closed, relaxed mouth seam.
-MOUTH_Z=1.460
-def mouthline(x):return MOUTH_Z+.0029*(abs(x)/.033)**2+.0004*x/.033
-for upper in (True,False):
-    vv=[];ff=[];U=64;V=9
-    for j in range(V):
-        t=j/(V-1)
-        for i in range(U):
-            x=-.034+.068*i/(U-1);f=max(0,1-(x/.034)**2)**.7
-            cupid=1+.28*exp(-((abs(x)-.009)/.0045)**2)-.21*exp(-(x/.004)**2)
-            height=(.0058*cupid if upper else .0072)*f
-            z=mouthline(x)+(height*t if upper else -height*t)
-            y=face_y(x,z)-.0004-.0037*f*sin(pi*t*.88)-.0018*f*(1-t)
-            vv.append((x,y,z))
-    for j in range(V-1):
-        for i in range(U-1):
-            a=j*U+i;ff.append((a,a+1,a+1+U,a+U))
-    mesh('Lip_Upper' if upper else 'Lip_Lower',vv,ff if upper else [tuple(reversed(f)) for f in ff],'Lips','lip')
-pts=[]
-for i in range(17):
-    x=-.0335+.067*i/16;z=mouthline(x);pts.append((x,face_y(x,z)-.0026,z))
-tube('Mouth_Closed_Seam',pts,.0008,'MouthCrease','lip',radii=[.1,.8,1,.8,.1],resolution=2,sides=6)
+    for t in range(13):
+        dx=-EYE_W*cos(pi*t/12);dz=float(lid_up(s,dx))+lid_tilt(s,dx)
+        pts.append((s*EYE_X+dx,EYE_Y-sqrt(max(1e-6,EYE_R**2-dx*dx-dz*dz))-.0016,EYE_Z+dz))
+    tube('Lash_Line_'+sn,pts,.0009,'Brows',part,radii=[.1,.7,1,1,.85,.5,.1],resolution=2,sides=6)
 
 # A softly structured long-sleeved crew neck. Subtle folds are part of the
 # garment mesh, with real ribbed bands and topstitched raglan construction.
@@ -395,7 +406,7 @@ for side in (-1,1):
     ff += [tuple(reversed(range(ns))),tuple((len(pts)-1)*ns+i for i in range(ns))]
     arms.append(mesh('Sleeve_'+str(side),vv,ff,'Top'))
 top=remesh_join([torso]+arms,'Top_Continuous_Garment',.0042,4)
-m=top.modifiers.new('Cloth topology economy','DECIMATE');m.ratio=.38;apply_mod(top,m)
+m=top.modifiers.new('Cloth topology economy','DECIMATE');m.ratio=.32;apply_mod(top,m)
 
 # Ribbed neck opening and hem: surface rings keep fabric tangent at the edge.
 def band(name,cx,cy,z,rx,ry,height,mat,part='body',rib=64):
@@ -482,7 +493,7 @@ for side in (-1,1):
               (cx-side*.045,cy-.012,basez-.047),(cx-side*.041,cy-.011,basez-.066)]
     parts.append(tube('Thumb_'+str(side),thumbpts,.0125,'Skin','hand',radii=[1.1,1,.78,.53],resolution=6,sides=12))
     hand=remesh_join(parts,'Hand_Continuous_'+str(side),.00165,3)
-    m=hand.modifiers.new('Hand topology economy','DECIMATE');m.ratio=.68;apply_mod(hand,m)
+    m=hand.modifiers.new('Hand topology economy','DECIMATE');m.ratio=.42;apply_mod(hand,m)
     p=Vector(thumbpts[-1]);ellipsoid('Thumb_Nail_'+str(side),(p.x,cy-.019,p.z+.010),(.0068,.0014,.008),'Nails','hand',20,12)
 
 # Sneakers are lasted, not rounded cubes: profiled toe spring, multi-level sole,
@@ -562,147 +573,86 @@ for side in (-1,1):
         y=-.093+.021*k;w=shoewidth(y)
         for edge in (-1,1):tube('Sole_Groove_'+str(side)+'_'+str(k)+'_'+str(edge),[(cx+edge*w*1.024,cy+y,.007),(cx+edge*w*1.031,cy+y,.014)],.00045,'Shoe_Panel',resolution=1,sides=4)
 
-# Hair library. Every style has a proper closed scalp shell, directional flow
-# carved into broad flattened masses, tapered ends and restrained flyaways.
+
+# Hair library. Each style is one sculpted implicit mass: a cap offset from the
+# real skull field above a hairline, ridge modulation that reads as combed
+# clumps, optional falling curtains for the longer cuts and fringe strands that
+# are snapped onto the skull surface. Faces hidden inside the head are removed.
 def hair_group(name):
     o=bpy.data.objects.new(name,None);CHAR.objects.link(o);o.empty_display_type='PLAIN_AXES';o.empty_display_size=.03
     o['isHairVariant']=True;HAIR[name]=o;return o
 
-def haircap(group,style):
-    vv=[];ff=[];nr=28;ns=96
-    rz=.170 if style=='Crop' else .177
-    for j in range(nr):
-        t=j/(nr-1)
-        for i in range(ns):
-            a=2*pi*i/ns;front=max(0,-sin(a));back=max(0,sin(a))
-            end=1.75-.65*front+.21*back
-            if style=='Crop':end-=.04*front
-            if style in ('Bob','Long'):end=1.84-.67*front+.11*back
-            end+=.025*sin(5*a+.5)+.012*sin(13*a)
-            ph=.012+t*end
-            flow=.0008*sin(19*a+ph*8)+.00055*sin(31*a+ph*5)
-            rx=.117+flow;ry=.112+flow
-            x=rx*sin(ph)*cos(a);y=.014+ry*sin(ph)*sin(a);z=1.552+rz*cos(ph)
-            if style=='Waves':z+=.002*exp(-((a-4.0)/.9)**2)*sin(ph)
-            vv.append((x,y,z))
-    for j in range(nr-1):
-        for i in range(ns):
-            a=j*ns+i;b=j*ns+(i+1)%ns;ff.append((a,b,b+ns,a+ns))
-    o=mesh(group.name+'_Scalp',vv,[tuple(reversed(f)) for f in ff],'Hair','hair',group)
-    mod=o.modifiers.new('Hairline thickness','SOLIDIFY');mod.thickness=.003;apply_mod(o,mod)
-    return o
+def skull_at(p):
+    P=tuple(np.array([v],dtype=np.float32) for v in p);return float(sdf_skull(P)[0])
+def on_skull(p,lift):
+    p=Vector(p);e=.0008
+    for _ in range(7):
+        d=skull_at(p)
+        n=Vector([skull_at(p+Vector(a))-d for a in ((e,0,0),(0,e,0),(0,0,e))]).normalized()
+        p-=n*(d-lift)
+    return tuple(p)
+def strand(P,pts,lifts,radii):
+    return chain(P,[on_skull(p,l) for p,l in zip(pts,lifts)],radii,.005)
 
-def lock(name,points,width,thickness,parent,profile=None):
-    path=catmull(points,6);vv=[];ff=[];ns=10
-    for i,p in enumerate(path):
-        t=i/(len(path)-1);tan=(path[min(i+1,len(path)-1)]-path[max(0,i-1)]).normalized()
-        # Local scalp normal gives a flattened ribbon following the head.
-        normal=Vector((p.x,(p.y-.014)*1.15,(p.z-1.552)*.82)).normalized()
-        if p.z<1.51:normal=Vector((p.x,p.y-.014,.015)).normalized()
-        u=tan.cross(normal).normalized();v=u.cross(tan).normalized()
-        if not u.length:u=Vector((1,0,0));v=Vector((0,1,0))
-        taper=(.22+.78*sin(pi*min(.97,t+.08))**.6)*(1-.94*smooth(.79,1,t))
-        for k in range(ns):
-            a=2*pi*k/ns
-            # A shallow central ridge catches light without cylindrical locks.
-            ridge=1+.16*cos(3*a)
-            vv.append(tuple(p+u*(width*taper*cos(a))+v*(thickness*taper*sin(a)*ridge)))
-    for j in range(len(path)-1):
-        for i in range(ns):
-            a=j*ns+i;b=j*ns+(i+1)%ns;ff.append((a,b,b+ns,a+ns))
-    ff += [tuple(reversed(range(ns))),tuple((len(path)-1)*ns+i for i in range(ns))]
-    return mesh(name,vv,ff,'Hair','hair',parent)
-
-def scalp_point(a,ph,lift=.003):
-    return ((.118+lift)*sin(ph)*cos(a),.014+(.113+lift)*sin(ph)*sin(a),1.552+(.177+lift)*cos(ph))
+def hair_field(style,G):
+    X,Y,Z=P=G.P
+    sk=sdf_skull(P)
+    ang=np.arctan2(X,-(Y-.012));aa=np.abs(ang);r=np.sqrt(X*X+(Y-.012)**2)
+    top=sstep(1.585,1.655,Z)
+    psi=np.arctan2(X,Z-1.56)
+    if style=='Waves':ridge_top=np.cos(230*(X-.55*(Y+.03))+1.5*np.sin(Y*40))
+    elif style=='Crop':ridge_top=np.cos(250*X+2.0*np.sin(Y*55+X*30))
+    else:ridge_top=np.cos(26*psi+1.2*np.sin(Y*30))
+    ridge_side=np.cos(34*ang+2.2*np.sin(Z*28+aa))*(.65+.35*np.cos(13*ang+5*Z))+.4*np.cos(19*ang-1.5*np.sin(Z*20))
+    ridge=top*ridge_top+(1-top)*ridge_side
+    hairline=np.interp(aa,[0,.55,1.0,1.45,1.9,2.6,pi],[1.670,1.662,1.636,1.600,1.560,1.505,1.485])
+    thick={'Crop':.006,'Waves':.010,'Bob':.014,'Long':.014}[style]
+    off=(thick+.012*top)*(.3+.7*sstep(hairline-.005,hairline+.045,Z))+.0035*ridge
+    d=smax(sk-off,hairline-Z,.010)
+    if style in ('Bob','Long'):
+        low=1.418 if style=='Bob' else 1.245
+        Rs=1/np.sqrt((np.sin(ang)/.111)**2+(np.cos(ang)/.121)**2)
+        Rs=Rs*np.sqrt(np.clip(1-(np.clip(Z-1.60,0,None)/.125)**2,.05,1))   # follow the skull above its widest point
+        earbump=.013*np.exp(-((aa-1.5)/.4)**2)*np.exp(-((Z-1.545)/.06)**2)
+        Rc=Rs+.014+earbump+.0035*ridge_side+.012*np.clip((1.56-Z)/.30,0,1)
+        if style=='Bob':Rc-=.008*np.clip((low+.06-Z)/.06,0,1)
+        curtain=np.abs(r-Rc)-.010
+        curtain=smax(curtain,low-Z,.012);curtain=smax(curtain,Z-1.69,.020)
+        afront=1.22-(.55*sstep(1.50,1.40,Z) if style=='Long' else 0)
+        curtain=smax(curtain,(afront-aa)*.12,.008)
+        d=smin(d,curtain,.016)
+    if style=='Waves':
+        for i in range(8):
+            t=i/7
+            d=smin(d,strand(P,[(.030-.010*t,-.070+.014*t,1.705),(-.030-.008*t,-.092,1.672-.004*t),(-.086-.004*t,-.060+.010*t,1.626-.010*t)],
+                [.016,.012,.004],[.012,.010,.004]),.008)
+        for i in range(5):
+            t=i/4
+            d=smin(d,strand(P,[(.040,-.060+.022*t,1.705),(.092,-.028+.020*t,1.625),(.107,.000+.024*t,1.575)],[.014,.010,.005],[.011,.009,.005]),.008)
+        d=ssub(d,strand(P,[(.028,-.050,1.685),(.030,-.010,1.70),(.028,.045,1.69)],[.031,.031,.031],[.008,.008,.008]),.004)
+    if style=='Crop':
+        for i in range(12):
+            x=-.075+.150*i/11
+            d=smin(d,strand(P,[(x*.7,.030,1.70),(x,-.050,1.69),(x*1.05,-.086,1.660+.006*sin(i*2.1))],[.012,.011,.005],[.010,.009,.004]),.007)
+    if style=='Bob':
+        for i in range(9):
+            x=-.072+.144*i/8
+            d=smin(d,strand(P,[(x*.75,-.055,1.70),(x,-.088,1.655),(x*1.03,-.094,1.606+.004*cos(i*1.3))],[.016,.010,.007],[.010,.009,.0075]),.008)
+    if style=='Long':
+        d=ssub(d,strand(P,[(0,-.050,1.685),(0,-.010,1.70),(0,.030,1.70)],[.031,.031,.031],[.008,.008,.008]),.004)
+    return d,sk
 
 for style in ('Crop','Waves','Bob','Long'):
-    group=hair_group('Hair_'+style);haircap(group,style)
-    if style=='Crop':
-        for i in range(18):
-            t=i/17
-            pts=[scalp_point(.35+.95*t,.75,.000),scalp_point(-.15-1.4*t,.22+.22*t,.000),scalp_point(-.95-1.20*t,.65+.15*t,.000),scalp_point(-1.18-1.1*t,1.06+.18*t,.000)]
-            lock(group.name+'_Flow_'+str(i),pts,.0105,.0025,group)
-    else:
-        # Side-parted sweep: broad asymmetrical strands across the crown.
-        for i in range(13):
-            t=i/12
-            pts=[scalp_point(.8-.5*t,.60+.40*t),scalp_point(-.40-1.0*t,.24+.58*t),
-                 scalp_point(-1.60-.80*t,.60+.50*t),scalp_point(-1.80-.80*t,1.08+.42*t)]
-            lock(group.name+'_Sweep_'+str(i),pts,.0135,.0038,group)
-        # Smaller section on the other side of the part.
-        for i in range(7):
-            t=i/6
-            pts=[scalp_point(.7-.5*t,.64),scalp_point(.22-.38*t,.70+.10*t),scalp_point(-.14-.40*t,1.0+.04*t),scalp_point(-.12-.47*t,1.45+.09*t)]
-            lock(group.name+'_Part_'+str(i),pts,.0105,.0030,group)
-    if style in ('Bob','Long'):
-        low=1.421 if style=='Bob' else 1.238
-        # Continuous back curtain prevents gaps between decorative masses.
-        vv=[];ff=[];ns=60;nr=24
-        for j in range(nr):
-            t=j/(nr-1)
-            for i in range(ns):
-                a=-.18+(pi+.36)*i/(ns-1)
-                w=.114+.013*sin(pi*t)+(.021*t if style=='Long' else .008*t)
-                dep=.106+.010*sin(pi*t)
-                x=w*cos(a);y=.017+dep*sin(a)
-                z=1.615+(low-1.615)*t+.008*sin(9*a+.5)*t**4
-                x+=.003*sin(t*8+a*3)*t
-                vv.append((x,y,z))
-        for j in range(nr-1):
-            for i in range(ns-1):
-                a=j*ns+i;ff.append((a,a+1,a+1+ns,a+ns))
-        o=mesh(group.name+'_Curtain',vv,[tuple(reversed(f)) for f in ff],'Hair','hair',group)
-        m=o.modifiers.new('Hair curtain thickness','SOLIDIFY');m.thickness=.009;apply_mod(o,m)
-        for i in range(20):
-            a=-.12+(pi+.24)*i/19;xx=.116*cos(a);yy=.018+.110*sin(a)
-            pts=[(xx*.78,yy*.91,1.659),(xx*1.01,yy*1.05,1.565),
-                 (xx*1.10+.003*sin(i),yy*1.02,low+.081),(xx*1.11+.008*sin(i*.9),yy*.95,low-.008+(.018*sin(i*1.7)))]
-            lock(group.name+'_Fall_'+str(i),pts,.016,.006,group)
-        # Face-framing front sections tuck into the silhouette.
-        for side in (-1,1):
-            for k in range(3):
-                end=low+.032+.018*k
-                pts=[(side*.087,-.058,1.679),(side*(.113+.003*k),-.069,1.563),
-                     (side*(.115+.007*k),-.060,1.462),(side*(.121+.009*k),-.042,end)]
-                lock(group.name+'_Frame_'+str(side)+'_'+str(k),pts,.012,.006,group)
-    # Short sideburns stay attached to the temple and taper into the ear.
-    if style in ('Crop','Waves'):
-        for side in (-1,1):
-            lock(group.name+'_Temple_'+str(side),[(side*.110,-.018,1.626),(side*.114,-.025,1.584),(side*.110,-.022,1.542)],.013,.004,group)
-
-# The scalp and groom must clear the actual non-ellipsoidal forehead. Enforce
-# a measured radial clearance against the head's cross sections, including
-# interpolated lock vertices; control-point fitting alone leaves intersections.
-for o in OWN:
-    if o.get('part')!='hair':continue
-    def radial_correction(co,clearance):
-        x,y,z=co
-        if not 1.398<z<1.704:return Vector((0,0,0))
-        w,fd,bd=interp(PROFILE,z)
-        angle=math.atan2(y,x);c=cos(angle);s=sin(angle)
-        depth=fd if s<0 else bd
-        skin_r=1/sqrt((c/max(w,.001))**2+(s/max(depth,.001))**2)
-        actual_r=sqrt(x*x+y*y)
-        required=skin_r+clearance
-        if actual_r<required and actual_r>.0001:
-            return Vector((x*(required/actual_r-1),y*(required/actual_r-1),0))
-        return Vector((0,0,0))
-    if '_Scalp' in o.name or '_Curtain' in o.name:
-        for v in o.data.vertices:
-            outward=v.normal.dot(Vector((v.co.x,v.co.y,0)))>0
-            v.co+=radial_correction(v.co,.009 if outward else .005)
-    else:
-        # Move a whole ten-vertex lock section together. Projecting each
-        # vertex separately collapses thickness and creates coplanar glitter.
-        for i in range(0,len(o.data.vertices),10):
-            ring=list(o.data.vertices)[i:i+10]
-            center=sum((v.co for v in ring),Vector())/len(ring)
-            correction=radial_correction(center,.015)
-            for v in ring:v.co+=correction
-    # Directional ridges survive a conservative collapse; hidden voxel density
-    # has already been removed from clothing, preserving the full face surface.
-    m=o.modifiers.new('Groom topology economy','DECIMATE');m.ratio=.69;apply_mod(o,m)
+    group=hair_group('Hair_'+style)
+    HG=Grid((-.176,-.150,1.415 if style=='Bob' else 1.235 if style=='Long' else 1.470),(.176,.190,1.745),.002)
+    d,sk=hair_field(style,HG)
+    o=HG.surface(d,group.name+'_Mass','Hair','hair',group,adaptivity=.12)
+    del d,sk,HG
+    # Drop the underside buried inside the skull; the head occludes it anyway.
+    C=centers(o);inside=sdf_skull(C)<-.004
+    bm=bmesh.new();bm.from_mesh(o.data);bm.faces.ensure_lookup_table()
+    bmesh.ops.delete(bm,geom=[bm.faces[i] for i in np.nonzero(inside)[0]],context='FACES');bm.to_mesh(o.data);bm.free()
+    polish(o,{'Crop':22000,'Waves':26000,'Bob':27000,'Long':29000}[style])
 
 # Consolidate semantic surfaces before authoring morphs. This preserves the
 # native material slots and reduces scene traversal/draw overhead dramatically.
@@ -718,32 +668,26 @@ for (part,parent_name),parts in merge_groups.items():
     for q in parts[1:]:
         if q in OWN:OWN.remove(q)
 
-# Actual shared morph geometry, authored in world coordinates. Every eye part
-# uses the same local transformation, keeping the iris, glints and lids aligned.
+# Shared morph geometry, authored in world coordinates. Lids, lips and brows
+# are head vertices, so the same local transformation moves eyeball and socket.
 def deform(co, name, part):
     x,y,z=co;dx=dy=dz=0.
-    facial=part in ('head','ear','lip','nose') or part.startswith(('eye_','brow_'))
-    eye=part.startswith('eye_');brow=part.startswith('brow_')
-    front=smooth(.025,-.060,y) if False else clamp((.045-y)/.085)
+    eye=part.startswith('eye_');brow=part.startswith('brow_');facial=part=='head' or eye or brow
+    front=clamp((.045-y)/.085)
     if name=='FaceWidth':
         if facial or part=='hair':dx=x*.10
         elif part=='neck':dx=x*.035
     elif name=='JawWidth':
-        if part in ('head','ear','lip','hair'):
-            influence=exp(-((z-1.438)/.054)**2)
-            dx=x*.125*influence
+        if part in ('head','hair'):dx=x*.125*exp(-((z-1.436)/.054)**2)
     elif name=='NoseWidth':
-        if part in ('head','nose'):
-            f=gauss(x,z,0,1.514,.026,.040)*front
-            dx=x*.26*f
+        if part=='head':dx=x*.26*gauss(x,z,0,1.515,.028,.045)*front
     elif name=='NoseLength':
-        if part in ('head','nose'):
-            f=gauss(x,z,0,1.520,.026,.042)*front
-            dz=-.0075*f;dy=-.0015*f
+        if part=='head':
+            f=gauss(x,z,0,1.520,.028,.048)*front;dz=-.0075*f;dy=-.0015*f
     elif name=='EyeSize':
         if eye:
             ex=-EYE_X if part.endswith('L') else EYE_X
-            dx=(x-ex)*.135;dz=(z-EYE_Z)*.135;dy=(y-EYE_Y)*.06
+            dx=(x-ex)*.135;dz=(z-EYE_Z)*.135;dy=(y-EYE_Y)*.04
         elif part=='head':
             for side in (-1,1):
                 ex=side*EYE_X;f=gauss(x,z,ex,EYE_Z,.039,.025)*front
@@ -752,21 +696,16 @@ def deform(co, name, part):
     elif name=='EyeSpacing':
         if eye or brow:dx=(-1 if part.endswith('L') else 1)*.0058
         elif part=='head':
-            for side in (-1,1):dx+=side*.0058*gauss(x,z,side*EYE_X,1.575,.032,.039)*front
+            for side in (-1,1):dx+=side*.0058*gauss(x,z,side*EYE_X,EYE_Z+.018,.034,.042)*front
     elif name=='LipFullness':
-        if part=='lip':
-            f=max(0,1-(x/.038)**2);dz=(z-mouthline(x))*.32;dy=-.0026*f
-        elif part=='head':
-            f=gauss(x,z,0,1.460,.038,.014)*front
-            dz=(z-MOUTH_Z)*.16*f;dy=-.0012*f
+        if part=='head':
+            f=gauss(x,z,0,MOUTH_Z,.040,.016)*front
+            dz=(z-mouthline(x))*.30*f;dy=-.0030*f
     elif name=='Smile':
-        if part=='lip':
-            t=clamp(abs(x)/.034);dz=.009*t*t;dx=x*.065
-            dy=.0015*t*t
-        elif part=='head':
-            f=gauss(x,z,0,1.463,.052,.024)*front
-            dz=.0085*clamp(abs(x)/.035)**2*f;dx=x*.040*f
-            for side in (-1,1):dz+=.0018*gauss(x,z,side*.055,1.507,.030,.024)*front
+        if part=='head':
+            f=gauss(x,z,0,MOUTH_Z+.003,.052,.024)*front
+            dz=.0095*clamp(abs(x)/.035)**2*f;dx=x*.045*f
+            for side in (-1,1):dz+=.0020*gauss(x,z,side*.055,1.505,.030,.024)*front
         elif eye:dz=.0007
     elif name=='BodyShape':
         if part in ('body','hand','neck'):

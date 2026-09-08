@@ -8,7 +8,7 @@
     "forward": "+Z",
     "units": "metres",
     "feetY": 0,
-    "approximateHeight": 1.731
+    "approximateHeight": 1.739
   },
   "defaultHair": "Hair_Waves",
   "hairGroups": [
@@ -147,21 +147,21 @@
   },
   "morphUsage": "Traverse every mesh; set each matching morphTargetDictionary entry to the same requested value. Negative facial weights are intentional. Apply all requested weights to all meshes including hidden hair variants.",
   "hairUsage": "All four parent groups are exported. Immediately hide all Hair_* groups except the selected exact name. Mesh children inherit visibility. Do not infer style from mesh names.",
-  "meshCount": 15,
-  "baseTriangles": 175440,
+  "meshCount": 12,
+  "baseTriangles": 170472,
   "hairTriangles": {
-    "Hair_Crop": 12414,
-    "Hair_Waves": 12930,
-    "Hair_Bob": 23256,
-    "Hair_Long": 23256
+    "Hair_Crop": 22000,
+    "Hair_Waves": 25999,
+    "Hair_Bob": 26999,
+    "Hair_Long": 29000
   },
   "visibleTrianglesByHair": {
-    "Hair_Crop": 187854,
-    "Hair_Waves": 188370,
-    "Hair_Bob": 198696,
-    "Hair_Long": 198696
+    "Hair_Crop": 192472,
+    "Hair_Waves": 196471,
+    "Hair_Bob": 197471,
+    "Hair_Long": 199472
   },
-  "glbBytes": 10242568,
+  "glbBytes": 13207220,
   "blenderBoundsXYZ": [
     [
       -0.3135681748390198,
@@ -169,11 +169,11 @@
     ],
     [
       -0.19171328842639923,
-      0.14140993356704712
+      0.17051108181476593
     ],
     [
       0.0,
-      1.731099247932434
+      1.7390313148498535
     ]
   ],
   "limitations": [

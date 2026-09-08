@@ -6,7 +6,7 @@ Run the commands below from the `twin-studio/` directory in this repository.
 
 ### Character revision status
 
-The exported `public/models/twin.glb`, editable `blender/twin.blend`, previews and validation receipt belong to the last completed character build, reproduced by `blender/make_twin.py`. The warmer, more playful face redesign is preserved separately in `blender/make_twin_playful.py`; that draft has not yet been rendered or visually accepted. Running it replaces the model exports, so review its output before treating it as the finished avatar. The application already includes softer lighting, playful default colors and gentler selfie suggestions.
+The exported `public/models/twin.glb`, editable `blender/twin.blend`, previews and validation receipt are produced by `blender/make_twin.py`. The head and every hair style are implicit sculpts: anatomical volumes (cranium, brow ridge, cheek and zygomatic masses, mandible, chin, nose, lips, lids, ears) are signed-distance primitives evaluated in numpy, blended, carved for the eye openings, nostrils and mouth seam, and meshed through Blender's bundled OpenVDB. Real eyeballs with a raised cornea sit behind the sculpted lids. `blender/make_twin_playful.py` is an older palette draft built on the previous height-field head and is superseded by this pipeline.
 
 ## Run locally
 
