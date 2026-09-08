@@ -1,8 +1,8 @@
 {
   "status": "PASS",
-  "glbSha256": "7d3a663e84fb01bb75d203d8732bcbae68e961eab7a8c5ab8e586101a9a01999",
-  "glbBytes": 13207220,
-  "glbMiB": 12.6,
+  "glbSha256": "16583f6df2d8fd0baa3d881c2a2b4086560d439a95811e84864eb5b81c073545",
+  "glbBytes": 13186604,
+  "glbMiB": 12.58,
   "meshCount": 12,
   "primitiveCount": 38,
   "allVariantsTriangles": 274470,
@@ -51,15 +51,15 @@
     ]
   },
   "morphMaximumDisplacementsMetres": {
-    "JawWidth": 0.017746374011039734,
     "EyeSize": 0.003976236704485925,
     "FaceWidth": 0.015001431107521057,
-    "Smile": 0.006157528353230892,
+    "LipFullness": 0.00304158531489804,
     "BodyShape": 0.04044875392752253,
-    "NoseLength": 0.007646879026440618,
     "EyeSpacing": 0.005800001323223114,
-    "NoseWidth": 0.0031194891780614853,
-    "LipFullness": 0.0030415398949901213
+    "Smile": 0.0061633819142775026,
+    "NoseLength": 0.007646879026440618,
+    "JawWidth": 0.017746374011039734,
+    "NoseWidth": 0.0031194891780614853
   },
   "hairGroups": [
     "Hair_Crop",
